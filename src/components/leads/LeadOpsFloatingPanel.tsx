@@ -139,6 +139,7 @@ export default function LeadOpsFloatingPanel() {
             {title}
             {job ? ` · job ${job.id.slice(0, 8)} (${job.status})` : ""}
           </p>
+          <p className="text-[10px] text-slate-400">Motor: navegador real en segundo plano (Google)</p>
         </div>
         <Button type="button" size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}

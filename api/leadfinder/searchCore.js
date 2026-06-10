@@ -1,3 +1,5 @@
+import { chromium } from "playwright";
+
 function normalizeLimit(raw) {
   const n = typeof raw === "number" ? raw : Number(raw);
   if (!Number.isFinite(n)) return 20;
@@ -105,43 +107,68 @@ function toCandidateFromSnippet(snippet, query) {
 }
 
 async function searchWeb(query, region, limit, env) {
-  const apiKey = String(env.GOOGLE_CSE_API_KEY || "").trim();
-  const cx = String(env.GOOGLE_CSE_CX || "").trim();
-  if (!apiKey || !cx) {
-    throw Object.assign(new Error("Faltan GOOGLE_CSE_API_KEY y/o GOOGLE_CSE_CX en variables de entorno."), {
-      statusCode: 500,
-    });
-  }
   const finalQuery = `${query} ${region} (colegio OR "institución educativa" OR megacolegio OR "colegio privado" OR "colegio público")`.trim();
-  const url = new URL("https://www.googleapis.com/customsearch/v1");
-  url.searchParams.set("key", apiKey);
-  url.searchParams.set("cx", cx);
-  url.searchParams.set("q", finalQuery);
-  url.searchParams.set("num", String(limit));
-  url.searchParams.set("hl", "es");
-  url.searchParams.set("gl", "co");
 
-  const res = await fetch(url.toString(), { method: "GET" });
-  const payload = await res.json();
-  if (!res.ok) {
-    const msg = String(payload?.error?.message || `Google CSE error (${res.status})`);
-    throw Object.assign(new Error(msg), { statusCode: res.status });
-  }
+  // Metodo principal: navegador real con Playwright.
+  let browser;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: ["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+    });
+    const page = await browser.newPage({
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+      locale: "es-CO",
+    });
 
-  const items = payload?.items || [];
-  const out = [];
-  for (const item of items) {
-    const candidate = toCandidateFromSnippet(
-      {
-        title: item?.title || "",
-        link: item?.link || "",
-        snippet: item?.snippet || "",
-      },
-      query,
-    );
-    if (candidate) out.push(candidate);
+    await page.goto("https://www.google.com/", { waitUntil: "domcontentloaded", timeout: 45000 });
+    await page.waitForTimeout(800);
+    await page.goto(`https://www.google.com/search?q=${encodeURIComponent(finalQuery)}&hl=es&gl=co&num=${limit}`, {
+      waitUntil: "domcontentloaded",
+      timeout: 45000,
+    });
+    await page.waitForTimeout(1200);
+
+    const raw = await page.evaluate(() => {
+      const blocks = Array.from(document.querySelectorAll("div#search div.MjjYud, div.g"));
+      return blocks.map((node) => {
+        const a = node.querySelector("a[href]");
+        const h3 = node.querySelector("h3");
+        const snippetNode =
+          node.querySelector(".VwiC3b") ||
+          node.querySelector(".aCOpRe") ||
+          node.querySelector("span");
+        return {
+          title: h3?.textContent?.trim() || "",
+          link: a?.getAttribute("href") || "",
+          snippet: snippetNode?.textContent?.trim() || "",
+        };
+      });
+    });
+
+    const out = [];
+    for (const item of raw) {
+      const link = String(item.link || "");
+      if (!/^https?:\/\//i.test(link)) continue;
+      const candidate = toCandidateFromSnippet(
+        {
+          title: item.title || "",
+          link,
+          snippet: item.snippet || "",
+        },
+        query,
+      );
+      if (candidate) out.push(candidate);
+      if (out.length >= limit) break;
+    }
+    if (out.length > 0) return out;
+    throw Object.assign(new Error("Google navegador no devolvio resultados parseables."), {
+      statusCode: 502,
+    });
+  } finally {
+    if (browser) await browser.close().catch(() => {});
   }
-  return out;
 }
 
 function dedupeCandidates(candidates) {
