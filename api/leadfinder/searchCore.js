@@ -110,29 +110,70 @@ function toCandidateFromSnippet(snippet, query) {
 
 async function searchWeb(query, region, limit, env) {
   const key = String(env.SERPAPI_API_KEY || "").trim();
-  if (!key) throw Object.assign(new Error("Falta SERPAPI_API_KEY en .env.local."), { statusCode: 500 });
-
   const finalQuery = `${query} ${region} (colegio OR "institución educativa" OR megacolegio OR "colegio privado" OR "colegio público")`.trim();
-  const url = new URL("https://serpapi.com/search.json");
-  url.searchParams.set("engine", "google");
-  url.searchParams.set("q", finalQuery);
-  url.searchParams.set("hl", "es");
-  url.searchParams.set("gl", "co");
-  url.searchParams.set("num", String(limit));
-  url.searchParams.set("api_key", key);
 
-  const res = await fetch(url.toString(), { method: "GET" });
-  const payload = await res.json();
-  if (!res.ok) {
-    const msg = String(payload?.error || `SerpAPI error (${res.status})`);
-    throw Object.assign(new Error(msg), { statusCode: res.status });
+  // 1) Si hay SerpAPI valida, usarla.
+  if (key) {
+    const url = new URL("https://serpapi.com/search.json");
+    url.searchParams.set("engine", "google");
+    url.searchParams.set("q", finalQuery);
+    url.searchParams.set("hl", "es");
+    url.searchParams.set("gl", "co");
+    url.searchParams.set("num", String(limit));
+    url.searchParams.set("api_key", key);
+
+    const res = await fetch(url.toString(), { method: "GET" });
+    const payload = await res.json();
+    if (res.ok) {
+      const organic = payload?.organic_results || [];
+      const out = [];
+      for (const item of organic) {
+        const c = toCandidateFromSnippet(item, query);
+        if (c) out.push(c);
+      }
+      if (out.length > 0) return out;
+    }
+    // Si falla (ej. invalid key), caemos a modo gratis automáticamente.
   }
 
-  const organic = payload?.organic_results || [];
+  // 2) Fallback gratis: DuckDuckGo HTML (sin API paga).
+  const ddg = await fetch(
+    `https://duckduckgo.com/html/?q=${encodeURIComponent(finalQuery)}`,
+    {
+      method: "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; OnniLeadFinder/1.0)",
+      },
+    },
+  );
+  const html = await ddg.text();
+  if (!ddg.ok || !html) {
+    throw Object.assign(new Error("No se pudo consultar buscador web gratis."), {
+      statusCode: ddg.status || 502,
+    });
+  }
+
   const out = [];
-  for (const item of organic) {
-    const c = toCandidateFromSnippet(item, query);
-    if (c) out.push(c);
+  const resultRegex =
+    /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>[\s\S]{0,1200}?<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = resultRegex.exec(html)) && out.length < limit) {
+    const rawLink = match[1] || "";
+    const cleanTitle = String(match[2] || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const cleanSnippet = String(match[3] || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    let link = rawLink;
+    try {
+      const u = new URL(rawLink, "https://duckduckgo.com");
+      const uddg = u.searchParams.get("uddg");
+      if (uddg) link = decodeURIComponent(uddg);
+    } catch {
+      // use raw link
+    }
+    const candidate = toCandidateFromSnippet(
+      { title: cleanTitle, link, snippet: cleanSnippet },
+      query,
+    );
+    if (candidate) out.push(candidate);
   }
   return out;
 }
