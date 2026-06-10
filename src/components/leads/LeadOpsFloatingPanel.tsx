@@ -40,7 +40,6 @@ export default function LeadOpsFloatingPanel() {
   const [term, setTerm] = useState("colegios");
   const [region, setRegion] = useState("Valledupar, Cesar");
   const [resultLimit, setResultLimit] = useState<10 | 20>(10);
-  const [useGoogleMaps, setUseGoogleMaps] = useState(false);
   const [rows, setRows] = useState<LeadRow[]>([]);
   const [job, setJob] = useState<JobMeta>(null);
 
@@ -102,7 +101,6 @@ export default function LeadOpsFloatingPanel() {
         query: term.trim(),
         region: region.trim(),
         limit: resultLimit,
-        useGoogleMaps,
       });
       await completeLeadSearchJob(jobRow.id, response);
 
@@ -149,7 +147,7 @@ export default function LeadOpsFloatingPanel() {
 
       {open && (
         <div className="space-y-4 p-4">
-          <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto_auto_auto]">
+          <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
             <Input
               value={term}
               onChange={(e) => setTerm(e.target.value)}
@@ -178,14 +176,6 @@ export default function LeadOpsFloatingPanel() {
                 20
               </Button>
             </div>
-            <Button
-              type="button"
-              variant={useGoogleMaps ? "secondary" : "outline"}
-              onClick={() => setUseGoogleMaps((v) => !v)}
-              disabled={loading}
-            >
-              Maps: {useGoogleMaps ? "ON" : "OFF"}
-            </Button>
             <Button type="button" variant="hero" onClick={() => void onSearch()} disabled={!canSearch || loading}>
               <Search className="mr-2 h-4 w-4" />
               {loading ? "Buscando..." : "Buscar"}

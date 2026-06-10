@@ -4,7 +4,6 @@ export type LeadfinderSearchParams = {
   query: string;
   region: string;
   limit?: number;
-  useGoogleMaps?: boolean;
 };
 
 export type LeadfinderResultRow = {
@@ -18,7 +17,7 @@ export type LeadfinderResultRow = {
   address?: string;
   website?: string;
   source_url: string;
-  source_kind: "web" | "google_maps";
+  source_kind: "web";
 };
 
 export type LeadfinderSearchResponse = {
@@ -37,7 +36,6 @@ export async function runLeadfinderSearch(params: LeadfinderSearchParams): Promi
       query: params.query,
       region: params.region,
       limit: params.limit ?? 20,
-      useGoogleMaps: params.useGoogleMaps === true,
     }),
   });
   const data = await response.json();
@@ -59,7 +57,6 @@ export async function runLeadfinderSearchViaSupabaseFn(
       query: params.query,
       region: params.region,
       limit: params.limit ?? 20,
-      useGoogleMaps: params.useGoogleMaps === true,
     },
   });
   if (error) throw error;
