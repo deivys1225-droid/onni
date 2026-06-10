@@ -6,7 +6,12 @@ import { Input } from "@/components/ui/input";
 import OnniAvatarDots from "@/components/OnniAvatarDots";
 import { getOnniIntroduction } from "@/data/onniBrain";
 import { toast } from "sonner";
-import { getOpAssistantHint, resolveOpCommand } from "@/lib/opAssistantResolver";
+import {
+  getOpAssistantHint,
+  type DesktopAction,
+  type OnniMode,
+  resolveOpCommand,
+} from "@/lib/opAssistantResolver";
 import { askOnniGemini } from "@/lib/onniGemini";
 import { shouldShowNativeVoiceError } from "@/lib/onniNativeVoiceErrors";
 import OpAiAndroidAzureMic from "@/components/OpAiAndroidAzureMic";
@@ -30,6 +35,25 @@ function isEditableKeyboardTarget(target: EventTarget | null): boolean {
   return target.isContentEditable;
 }
 
+async function executeDesktopAction(action: DesktopAction): Promise<{ ok: boolean; message?: string }> {
+  if (window.onniDesktop?.runAction) {
+    return window.onniDesktop.runAction(action);
+  }
+
+  if (action.type === "open_url") {
+    window.open(action.url, "_blank", "noopener,noreferrer");
+    return { ok: true, message: "Abri la pagina en el navegador." };
+  }
+
+  if (action.type === "search_google") {
+    const url = `https://www.google.com/search?q=${encodeURIComponent(action.query)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+    return { ok: true, message: "Abri la busqueda en Google." };
+  }
+
+  return { ok: false, message: "Esta accion requiere la app de escritorio Onni (Electron)." };
+}
+
 function appendAssistantAnswer(
   setMessages: Dispatch<SetStateAction<UiMessage[]>>,
   sessionRef: MutableRefObject<{ lastAnswer?: string; lastAnswerFromGemini?: boolean }>,
@@ -50,6 +74,7 @@ export default function OpAiAssistant() {
   const [electronMicState, setElectronMicState] = useState({ isRecording: false, isProcessing: false });
   const [text, setText] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [onniMode, setOnniMode] = useState<OnniMode>("tareas");
   const [messages, setMessages] = useState<UiMessage[]>([
     { role: "assistant", text: getOnniIntroduction() },
   ]);
@@ -112,7 +137,7 @@ export default function OpAiAssistant() {
   const openRef = useRef(open);
   openRef.current = open;
 
-  const hint = useMemo(() => getOpAssistantHint(location.pathname), [location.pathname]);
+  const hint = useMemo(() => getOpAssistantHint(location.pathname, onniMode), [location.pathname, onniMode]);
   const isHomePortada = location.pathname === "/";
 
   const runCommand = useCallback(
@@ -139,18 +164,36 @@ export default function OpAiAssistant() {
         const result = resolveOpCommand(trimmed, location.pathname, {
           lastAnswer: sessionRef.current.lastAnswer,
           appRole: roleForCommand,
+          mode: onniMode,
         });
+        if (result.mode !== onniMode) {
+          setOnniMode(result.mode);
+        }
+
+        if (result.handled && result.action) {
+          const actionResult = await executeDesktopAction(result.action);
+          const finalText = actionResult?.ok
+            ? `${result.answer} ${actionResult.message || ""}`.trim()
+            : `${result.answer} ${actionResult?.message || "No se pude completar la accion."}`.trim();
+          appendAssistantAnswer(setMessages, sessionRef, finalText, speakAnswer);
+          return finalText;
+        }
+
+        if (result.handled) {
+          appendAssistantAnswer(setMessages, sessionRef, result.answer, speakAnswer);
+          return result.answer;
+        }
+
+        let finalAnswer = result.answer;
         const aiAnswer = await askOnniGemini({
           message: trimmed,
           contextPath: location.pathname,
         });
-        if (!aiAnswer) {
-          const errText =
-            "No pude conectar con la IA (ChatGPT/Gemini). Revisa internet o las claves del backend.";
-          appendAssistantAnswer(setMessages, sessionRef, errText, speakAnswer);
-          return errText;
+        if (aiAnswer) {
+          finalAnswer = aiAnswer;
+        } else {
+          finalAnswer = "No pude conectar con la IA (ChatGPT/Gemini). Revisa internet o las claves del backend.";
         }
-        const finalAnswer = aiAnswer;
         sessionRef.current.lastAnswer = finalAnswer;
         appendAssistantAnswer(setMessages, sessionRef, finalAnswer, speakAnswer);
         return finalAnswer;
@@ -158,7 +201,7 @@ export default function OpAiAssistant() {
         setProcessing(false);
       }
     },
-    [location.pathname, speakAnswer, user?.id],
+    [location.pathname, onniMode, speakAnswer, user?.id],
   );
 
   runCommandRef.current = runCommand;
@@ -524,7 +567,9 @@ export default function OpAiAssistant() {
           <div className="flex items-start gap-3 border-b border-white/10 px-3 py-3">
             <OnniAvatarDots size="md" state={avatarState} className="mt-0.5 shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-cyan-100">Onni</p>
+              <p className="text-sm font-semibold text-cyan-100">
+                Onni · {onniMode === "tareas" ? "Modo tareas" : "Modo programador"}
+              </p>
             </div>
             <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
               Cerrar
