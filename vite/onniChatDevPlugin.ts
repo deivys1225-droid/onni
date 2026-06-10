@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 import { runOnniChat } from "../api/onni/chatCore.js";
+import { runLeadfinderSearch } from "../api/leadfinder/searchCore.js";
 
 function readJsonBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -31,7 +32,7 @@ export function onniChatDevPlugin(env: Record<string, string>): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = req.url?.split("?")[0];
-        if (url !== "/api/onni/chat") return next();
+        if (url !== "/api/onni/chat" && url !== "/api/leadfinder/search") return next();
 
         if (req.method === "OPTIONS") {
           res.statusCode = 204;
@@ -46,7 +47,15 @@ export function onniChatDevPlugin(env: Record<string, string>): Plugin {
 
         try {
           const body = await readJsonBody(req);
-          const result = await runOnniChat(body as { message?: string; contextPath?: string }, env);
+          if (url === "/api/onni/chat") {
+            const result = await runOnniChat(body as { message?: string; contextPath?: string }, env);
+            sendJson(res, 200, result);
+            return;
+          }
+          const result = await runLeadfinderSearch(
+            body as { query?: string; region?: string; limit?: number; useGoogleMaps?: boolean },
+            env,
+          );
           sendJson(res, 200, result);
         } catch (error) {
           const message = error instanceof Error ? error.message : "Error inesperado";

@@ -39,6 +39,8 @@ export default defineConfig(({ mode }) => {
     OLLAMA_ONLY: env.OLLAMA_ONLY || env.VITE_OLLAMA_ONLY || "",
     OLLAMA_HOST: env.OLLAMA_HOST || env.VITE_OLLAMA_HOST || "",
     OLLAMA_MODEL: env.OLLAMA_MODEL || env.VITE_OLLAMA_MODEL || "",
+    SERPAPI_API_KEY: env.SERPAPI_API_KEY || env.VITE_SERPAPI_API_KEY || "",
+    GOOGLE_MAPS_API_KEY: env.GOOGLE_MAPS_API_KEY || env.VITE_GOOGLE_MAPS_API_KEY || "",
   };
   return {
   base: "./",

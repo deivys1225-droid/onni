@@ -30,6 +30,30 @@ export type LeadfinderSearchResponse = {
 };
 
 export async function runLeadfinderSearch(params: LeadfinderSearchParams): Promise<LeadfinderSearchResponse> {
+  const response = await fetch("/api/leadfinder/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query: params.query,
+      region: params.region,
+      limit: params.limit ?? 20,
+      useGoogleMaps: params.useGoogleMaps === true,
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok || data?.ok === false) {
+    throw new Error(String(data?.error || `LeadFinder API error (${response.status})`));
+  }
+  const safe = data as LeadfinderSearchResponse | null;
+  if (!safe || !Array.isArray(safe.results)) {
+    throw new Error("Leadfinder devolvio un formato invalido.");
+  }
+  return safe;
+}
+
+export async function runLeadfinderSearchViaSupabaseFn(
+  params: LeadfinderSearchParams,
+): Promise<LeadfinderSearchResponse> {
   const { data, error } = await supabase.functions.invoke("leadfinder-search", {
     body: {
       query: params.query,
@@ -38,7 +62,6 @@ export async function runLeadfinderSearch(params: LeadfinderSearchParams): Promi
       useGoogleMaps: params.useGoogleMaps === true,
     },
   });
-
   if (error) throw error;
   const response = data as LeadfinderSearchResponse | null;
   if (!response || !Array.isArray(response.results)) {

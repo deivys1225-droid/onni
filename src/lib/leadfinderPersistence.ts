@@ -44,7 +44,17 @@ export async function createLeadSearchJob(params: {
     .select("id, query_text, region_text, status, result_count, created_at")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    // Modo offline/local: no bloquear si Supabase falla.
+    return {
+      id: crypto.randomUUID(),
+      query_text: params.query,
+      region_text: params.region,
+      status: "running",
+      result_count: 0,
+      created_at: new Date().toISOString(),
+    };
+  }
   return data as LeadSearchJobRow;
 }
 
@@ -66,7 +76,7 @@ export async function completeLeadSearchJob(
 
   if (rows.length > 0) {
     const { error: rawError } = await supabase.from("lead_search_raw_results").insert(rows);
-    if (rawError) throw rawError;
+    if (rawError) return;
   }
 
   const { error: updateError } = await supabase
@@ -78,7 +88,7 @@ export async function completeLeadSearchJob(
     })
     .eq("id", jobId);
 
-  if (updateError) throw updateError;
+  if (updateError) return;
 }
 
 export async function failLeadSearchJob(jobId: string, message: string): Promise<void> {
@@ -90,7 +100,7 @@ export async function failLeadSearchJob(jobId: string, message: string): Promise
       finished_at: new Date().toISOString(),
     })
     .eq("id", jobId);
-  if (error) throw error;
+  if (error) return;
 }
 
 export async function getLatestLeadSearchSnapshot(): Promise<{
@@ -102,7 +112,7 @@ export async function getLatestLeadSearchSnapshot(): Promise<{
     .select("id, query_text, region_text, status, result_count, created_at")
     .order("created_at", { ascending: false })
     .limit(1);
-  if (jobsError) throw jobsError;
+  if (jobsError) return { job: null, rows: [] };
 
   const job = ((jobs ?? [])[0] as LeadSearchJobRow | undefined) ?? null;
   if (!job) return { job: null, rows: [] };
@@ -112,7 +122,7 @@ export async function getLatestLeadSearchSnapshot(): Promise<{
     .select("id, lead_search_job_id, name, entity_type, phone, email, address, website, source_url, source_kind, created_at")
     .eq("lead_search_job_id", job.id)
     .order("created_at", { ascending: true });
-  if (rowsError) throw rowsError;
+  if (rowsError) return { job, rows: [] };
 
   return { job, rows: (rows ?? []) as LeadRawResultRow[] };
 }
