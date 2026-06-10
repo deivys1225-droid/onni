@@ -136,7 +136,46 @@ async function searchWeb(query, region, limit, env) {
     // Si falla (ej. invalid key), caemos a modo gratis automáticamente.
   }
 
-  // 2) Fallback gratis: DuckDuckGo HTML (sin API paga).
+  // 2) Fallback gratis prioritario: Google web directo (sin API paga).
+  // Nota: como es scrape HTML, Google puede variar el markup con el tiempo.
+  const googleUrl = new URL("https://www.google.com/search");
+  googleUrl.searchParams.set("q", finalQuery);
+  googleUrl.searchParams.set("hl", "es");
+  googleUrl.searchParams.set("gl", "co");
+  googleUrl.searchParams.set("num", String(limit));
+  googleUrl.searchParams.set("pws", "0");
+  const googleRes = await fetch(googleUrl.toString(), {
+    method: "GET",
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+      "Accept-Language": "es-CO,es;q=0.9,en;q=0.8",
+    },
+  });
+  const googleHtml = await googleRes.text();
+  if (googleRes.ok && googleHtml) {
+    const outGoogle = [];
+    const blockRegex = /<div class="MjjYud[\s\S]*?<\/div><\/div>/gi;
+    const blocks = googleHtml.match(blockRegex) || [];
+    for (const block of blocks) {
+      if (outGoogle.length >= limit) break;
+      const linkMatch = block.match(/href="\/url\?q=([^"&]+)[^"]*"/i);
+      const h3Match = block.match(/<h3[^>]*>([\s\S]*?)<\/h3>/i);
+      const snippetMatch =
+        block.match(/<div class="VwiC3b[\s\S]*?>([\s\S]*?)<\/div>/i) ||
+        block.match(/<span class="aCOpRe[\s\S]*?>([\s\S]*?)<\/span>/i);
+      if (!linkMatch || !h3Match) continue;
+      const link = decodeURIComponent(linkMatch[1]);
+      if (!/^https?:\/\//i.test(link)) continue;
+      if (/google\./i.test(new URL(link).hostname)) continue;
+      const title = String(h3Match[1] || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      const snippet = String(snippetMatch?.[1] || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+      const candidate = toCandidateFromSnippet({ title, link, snippet }, query);
+      if (candidate) outGoogle.push(candidate);
+    }
+    if (outGoogle.length > 0) return outGoogle;
+  }
+
+  // 3) Último fallback gratis: DuckDuckGo HTML (sin API paga).
   const ddg = await fetch(
     `https://duckduckgo.com/html/?q=${encodeURIComponent(finalQuery)}`,
     {
