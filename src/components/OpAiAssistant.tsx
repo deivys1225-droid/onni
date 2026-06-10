@@ -567,7 +567,6 @@ export default function OpAiAssistant() {
           <OnniAvatarDots
             size={isHomePortada ? "hero" : "lg"}
             state={avatarState}
-            className={isHomePortada ? "max-sm:h-[200px] max-sm:w-[200px]" : undefined}
           />
         </button>
       ) : (

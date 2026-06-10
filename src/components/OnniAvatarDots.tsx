@@ -706,14 +706,28 @@ export default function OnniAvatarDots({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = canvas?.parentElement;
+    if (!canvas || !container) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const canvasPx = CANVAS_PX_BY_SIZE[size];
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = canvasPx * dpr;
-    canvas.height = canvasPx * dpr;
+    let canvasPx = CANVAS_PX_BY_SIZE[size];
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    const syncCanvasSize = () => {
+      const rect = container.getBoundingClientRect();
+      const cssSize = Math.round(Math.min(rect.width, rect.height));
+      canvasPx = Math.max(1, cssSize || CANVAS_PX_BY_SIZE[size]);
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = canvasPx * dpr;
+      canvas.height = canvasPx * dpr;
+      canvas.style.width = `${canvasPx}px`;
+      canvas.style.height = `${canvasPx}px`;
+    };
+
+    syncCanvasSize();
+    const resizeObserver = new ResizeObserver(syncCanvasSize);
+    resizeObserver.observe(container);
 
     let raf = 0;
     const start = performance.now();
@@ -833,7 +847,10 @@ export default function OnniAvatarDots({
     };
 
     raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      resizeObserver.disconnect();
+      cancelAnimationFrame(raf);
+    };
   }, [size]);
 
   return (
@@ -843,7 +860,11 @@ export default function OnniAvatarDots({
       role="img"
       aria-label={title}
     >
-      <canvas ref={canvasRef} className="onni-dots-avatar__canvas h-full w-full" aria-hidden />
+      <canvas
+        ref={canvasRef}
+        className="onni-dots-avatar__canvas block max-h-full max-w-full"
+        aria-hidden
+      />
     </div>
   );
 }
