@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
+import { onniChatDevPlugin } from "./vite/onniChatDevPlugin";
 
 function paypalSdkHeadPlugin(mode: string, env: Record<string, string>): Plugin {
   const environment = env.VITE_PAYPAL_ENVIRONMENT === "production" ? "production" : "sandbox";
@@ -29,6 +30,12 @@ function paypalSdkHeadPlugin(mode: string, env: Record<string, string>): Plugin 
 // base relativo: obligatorio para que assets carguen en WebView (file://) con Capacitor.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const devChatEnv: Record<string, string> = {
+    OPENAI_API_KEY: env.OPENAI_API_KEY || env.VITE_OPENAI_API_KEY || "",
+    GEMINI_API_KEY: env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || "",
+    OPENAI_MODEL: env.OPENAI_MODEL || env.VITE_OPENAI_MODEL || "",
+    GEMINI_MODEL: env.GEMINI_MODEL || "",
+  };
   return {
   base: "./",
   envPrefix: ["VITE_", "NEXT_PUBLIC_"],
@@ -57,7 +64,7 @@ export default defineConfig(({ mode }) => {
       },
     },
   },
-  plugins: [react(), paypalSdkHeadPlugin(mode, env)],
+  plugins: [react(), paypalSdkHeadPlugin(mode, env), onniChatDevPlugin(devChatEnv)],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
