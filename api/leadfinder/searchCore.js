@@ -171,6 +171,48 @@ async function searchWeb(query, region, limit, env) {
   }
 }
 
+async function searchWebCseFallback(query, region, limit, env) {
+  const apiKey = String(env.GOOGLE_CSE_API_KEY || "").trim();
+  const cx = String(env.GOOGLE_CSE_CX || "").trim();
+  if (!apiKey || !cx) {
+    throw Object.assign(new Error("Fallback CSE no configurado (faltan GOOGLE_CSE_API_KEY/GOOGLE_CSE_CX)."), {
+      statusCode: 500,
+    });
+  }
+
+  const finalQuery = `${query} ${region} (colegio OR "institución educativa" OR megacolegio OR "colegio privado" OR "colegio público")`.trim();
+  const url = new URL("https://www.googleapis.com/customsearch/v1");
+  url.searchParams.set("key", apiKey);
+  url.searchParams.set("cx", cx);
+  url.searchParams.set("q", finalQuery);
+  url.searchParams.set("num", String(limit));
+  url.searchParams.set("hl", "es");
+  url.searchParams.set("gl", "co");
+
+  const res = await fetch(url.toString(), { method: "GET" });
+  const payload = await res.json();
+  if (!res.ok) {
+    const msg = String(payload?.error?.message || `Google CSE error (${res.status})`);
+    throw Object.assign(new Error(msg), { statusCode: res.status });
+  }
+
+  const items = payload?.items || [];
+  const out = [];
+  for (const item of items) {
+    const candidate = toCandidateFromSnippet(
+      {
+        title: item?.title || "",
+        link: item?.link || "",
+        snippet: item?.snippet || "",
+      },
+      query,
+    );
+    if (candidate) out.push(candidate);
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
 function dedupeCandidates(candidates) {
   const byKey = new Map();
   for (const item of candidates) {
@@ -187,12 +229,28 @@ export async function runLeadfinderSearch(body, env) {
   const limit = normalizeLimit(body?.limit);
   if (!query || !region) throw Object.assign(new Error("Falta query o region."), { statusCode: 400 });
 
-  const web = await searchWeb(query, region, limit, env);
-  const deduped = dedupeCandidates([...web]).slice(0, limit);
+  let web = [];
+  let modeUsed = "browser";
+  let browserError = "";
+
+  try {
+    web = await searchWeb(query, region, limit, env);
+  } catch (error) {
+    browserError = error instanceof Error ? error.message : "Error desconocido en modo browser";
+    web = await searchWebCseFallback(query, region, limit, env);
+    modeUsed = "cse_fallback";
+  }
+
+  const deduped = dedupeCandidates(web).slice(0, limit);
 
   return {
     ok: true,
-    provider: "google-custom-search",
+    provider: modeUsed === "browser" ? "google-browser" : "google-cse-fallback",
+    mode_used: modeUsed,
+    mode_note:
+      modeUsed === "browser"
+        ? "Busqueda ejecutada en navegador real (Playwright)."
+        : `Navegador real fallo y se uso fallback CSE. Detalle: ${browserError}`,
     query,
     region,
     count: deduped.length,

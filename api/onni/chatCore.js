@@ -159,7 +159,12 @@ export async function runOnniChat(body, env = {}) {
     try {
       return { ok: true, ...(await askOllama(message, contextPath, ollamaHost, ollamaModel)) };
     } catch (ollamaError) {
-      if (ollamaOnly || (!openaiKey && !geminiKey)) throw ollamaError;
+      // Si hay proveedores cloud configurados, permitimos fallback aunque ollamaOnly esté activo,
+      // para evitar que el chat quede bloqueado cuando Ollama local no está disponible.
+      if (!openaiKey && !geminiKey) throw ollamaError;
+      if (ollamaOnly) {
+        console.warn("[Onni AI] Ollama-only activo, pero hay claves cloud. Usando fallback OpenAI/Gemini.");
+      }
     }
   }
 

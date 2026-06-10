@@ -22,6 +22,8 @@ export type LeadfinderResultRow = {
 
 export type LeadfinderSearchResponse = {
   provider: string;
+  mode_used?: "browser" | "cse_fallback";
+  mode_note?: string;
   query: string;
   region: string;
   count: number;

@@ -7,6 +7,7 @@ import OnniAvatarDots from "@/components/OnniAvatarDots";
 import { getOnniIntroduction } from "@/data/onniBrain";
 import { toast } from "sonner";
 import { getOpAssistantHint, resolveOpCommand } from "@/lib/opAssistantResolver";
+import { askOnniGemini } from "@/lib/onniGemini";
 import { shouldShowNativeVoiceError } from "@/lib/onniNativeVoiceErrors";
 import OpAiAndroidAzureMic from "@/components/OpAiAndroidAzureMic";
 import OpAiElectronAzureMic from "@/components/OpAiElectronAzureMic";
@@ -139,10 +140,20 @@ export default function OpAiAssistant() {
           lastAnswer: sessionRef.current.lastAnswer,
           appRole: roleForCommand,
         });
-
-        sessionRef.current.lastAnswer = result.answer;
-        appendAssistantAnswer(setMessages, sessionRef, result.answer, speakAnswer);
-        return result.answer;
+        const aiAnswer = await askOnniGemini({
+          message: trimmed,
+          contextPath: location.pathname,
+        });
+        if (!aiAnswer) {
+          const errText =
+            "No pude conectar con la IA (ChatGPT/Gemini). Revisa internet o las claves del backend.";
+          appendAssistantAnswer(setMessages, sessionRef, errText, speakAnswer);
+          return errText;
+        }
+        const finalAnswer = aiAnswer;
+        sessionRef.current.lastAnswer = finalAnswer;
+        appendAssistantAnswer(setMessages, sessionRef, finalAnswer, speakAnswer);
+        return finalAnswer;
       } finally {
         setProcessing(false);
       }

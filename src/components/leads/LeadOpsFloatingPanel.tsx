@@ -35,13 +35,15 @@ type JobMeta = {
 } | null;
 
 export default function LeadOpsFloatingPanel() {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [term, setTerm] = useState("colegios");
   const [region, setRegion] = useState("Valledupar, Cesar");
   const [resultLimit, setResultLimit] = useState<10 | 20>(10);
   const [rows, setRows] = useState<LeadRow[]>([]);
   const [job, setJob] = useState<JobMeta>(null);
+  const [lastMode, setLastMode] = useState<"browser" | "cse_fallback" | "none">("none");
+  const [lastModeNote, setLastModeNote] = useState("");
 
   const resultCount = rows.length;
   const canSearch = term.trim().length >= 3 && region.trim().length >= 3;
@@ -102,6 +104,8 @@ export default function LeadOpsFloatingPanel() {
         region: region.trim(),
         limit: resultLimit,
       });
+      setLastMode(response.mode_used ?? "none");
+      setLastModeNote(response.mode_note ?? "");
       await completeLeadSearchJob(jobRow.id, response);
 
       setRows(
@@ -118,17 +122,35 @@ export default function LeadOpsFloatingPanel() {
           source: `${response.provider}`,
         })),
       );
-      toast.success(`Busqueda completada: ${response.count} resultados.`);
+      toast.success(
+        `Busqueda completada: ${response.count} resultados (${response.mode_used === "browser" ? "modo navegador real" : "modo fallback"}).`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "No se pudo completar la busqueda.";
       if (currentJobId) {
         void failLeadSearchJob(currentJobId, message);
       }
+      setLastMode("none");
+      setLastModeNote("");
       toast.error(message);
     } finally {
       setLoading(false);
     }
   };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="fixed bottom-4 right-4 z-[95] inline-flex items-center gap-2 rounded-xl border border-cyan-300/40 bg-slate-950/90 px-4 py-2 text-sm font-medium text-cyan-100 shadow-[0_0_35px_-16px_rgba(34,211,238,0.9)] backdrop-blur-xl transition hover:border-cyan-200/70 hover:text-white"
+        aria-label="Abrir LeadFinder Control"
+      >
+        <Search className="h-4 w-4" />
+        <span>LeadFinder Control</span>
+      </button>
+    );
+  }
 
   return (
     <aside className="fixed bottom-4 right-4 z-[95] w-[min(96vw,960px)] rounded-2xl border border-cyan-300/30 bg-slate-950/90 shadow-[0_0_45px_-18px_rgba(34,211,238,0.75)] backdrop-blur-xl">
@@ -139,15 +161,22 @@ export default function LeadOpsFloatingPanel() {
             {title}
             {job ? ` · job ${job.id.slice(0, 8)} (${job.status})` : ""}
           </p>
-          <p className="text-[10px] text-slate-400">Motor: navegador real en segundo plano (Google)</p>
+          <p className="text-[10px] text-slate-400">
+            Motor activo:{" "}
+            {lastMode === "browser"
+              ? "Navegador real (Playwright)"
+              : lastMode === "cse_fallback"
+                ? "Fallback Google CSE"
+                : "Pendiente de ejecucion"}
+          </p>
+          {lastModeNote ? <p className="text-[10px] text-slate-500">{lastModeNote}</p> : null}
         </div>
-        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
-          {open ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          <ChevronDown className="h-4 w-4" />
         </Button>
       </header>
 
-      {open && (
-        <div className="space-y-4 p-4">
+      <div className="space-y-4 p-4">
           <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto_auto]">
             <Input
               value={term}
@@ -232,8 +261,7 @@ export default function LeadOpsFloatingPanel() {
               Generar borradores
             </Button>
           </div>
-        </div>
-      )}
+      </div>
     </aside>
   );
 }
