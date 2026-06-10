@@ -99,7 +99,7 @@ export const OP_LOBBY_HINTS = [] as const;
 export function getOpAssistantHelpText(): string {
   return [
     "Navegación: inicio, entrar, registro, privacidad, términos.",
-    "Pregúntame lo que quieras: uso Gemini para responder dudas generales.",
+    "Pregúntame lo que quieras: respondo con ChatGPT (OpenAI) y Gemini solo si hace falta.",
     "Menú: “abre el menú”, “cierra el menú”.",
   ].join("\n");
 }

@@ -7,7 +7,7 @@ import OnniAvatarDots from "@/components/OnniAvatarDots";
 import { dispatchOpCommand } from "@/lib/opCommandBus";
 import { getOnniIntroduction } from "@/data/onniBrain";
 import { toast } from "sonner";
-import { getOpAssistantHint, resolveOpCommand, shouldAskOnniGemini } from "@/lib/opAssistantResolver";
+import { getOpAssistantHint, resolveOpCommand } from "@/lib/opAssistantResolver";
 import { askOnniGemini, isOnniNavigationResult } from "@/lib/onniGemini";
 import { extractWikipediaTopic, fetchWikipediaSummary } from "@/lib/wikipediaSummary";
 import { shouldShowNativeVoiceError } from "@/lib/onniNativeVoiceErrors";
@@ -174,27 +174,13 @@ export default function OpAiAssistant() {
           return result.answer;
         }
 
-        if (!shouldAskOnniGemini(result)) {
-          sessionRef.current.lastAnswer = result.answer;
-          appendAssistantAnswer(setMessages, sessionRef, result.answer, speakAnswer);
-          return result.answer;
-        }
-
-        const geminiAnswer = await askOnniGemini({
+        const aiAnswer = await askOnniGemini({
           message: trimmed,
           contextPath: location.pathname,
         });
-        const asksAboutGemini = /\b(gemini|ia externa|conectad[ao]?\s+a?\s*gemini)\b/i.test(trimmed);
-        if (geminiAnswer) {
-          appendAssistantAnswer(setMessages, sessionRef, geminiAnswer, speakAnswer, { fromGemini: true });
-          return geminiAnswer;
-        }
-
-        if (asksAboutGemini) {
-          const fallbackGemini =
-            "Sí, estoy conectada a ChatGPT (OpenAI) y uso Gemini como respaldo. Ahora mismo la API no respondió (cuota o red); inténtalo de nuevo en un minuto.";
-          appendAssistantAnswer(setMessages, sessionRef, fallbackGemini, speakAnswer, { fromGemini: true });
-          return fallbackGemini;
+        if (aiAnswer) {
+          appendAssistantAnswer(setMessages, sessionRef, aiAnswer, speakAnswer, { fromGemini: true });
+          return aiAnswer;
         }
 
         const wikiTopic = extractWikipediaTopic(trimmed);
