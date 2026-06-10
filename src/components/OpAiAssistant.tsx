@@ -1,21 +1,18 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import { Mic, MicOff, Send, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import OnniAvatarDots from "@/components/OnniAvatarDots";
-import { dispatchOpCommand } from "@/lib/opCommandBus";
 import { getOnniIntroduction } from "@/data/onniBrain";
 import { toast } from "sonner";
 import { getOpAssistantHint, resolveOpCommand } from "@/lib/opAssistantResolver";
-import { askOnniGemini, isOnniNavigationResult } from "@/lib/onniGemini";
-import { extractWikipediaTopic, fetchWikipediaSummary } from "@/lib/wikipediaSummary";
 import { shouldShowNativeVoiceError } from "@/lib/onniNativeVoiceErrors";
 import OpAiAndroidAzureMic from "@/components/OpAiAndroidAzureMic";
 import OpAiElectronAzureMic from "@/components/OpAiElectronAzureMic";
 import { useOnniAzureMic } from "@/hooks/useOnniAzureMic";
 import { useOnniChatVoice } from "@/hooks/useOnniChatVoice";
-import { useOnniVoice, useOnniVoicePrefs } from "@/hooks/useOnniVoice";
+import { useOnniVoice } from "@/hooks/useOnniVoice";
 import { useAuth } from "@/hooks/useAuth";
 import { isDesktopWebBrowser, isElectronDesktopApp, isOnniAndroidVoice } from "@/lib/deviceDetection";
 import { isAzureMicSupported } from "@/lib/onniAzureStt";
@@ -46,7 +43,6 @@ function appendAssistantAnswer(
 }
 
 export default function OpAiAssistant() {
-  const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState(false);
   const [androidMicState, setAndroidMicState] = useState({ isRecording: false, isProcessing: false });
@@ -61,7 +57,6 @@ export default function OpAiAssistant() {
   const pendingVoiceRef = useRef("");
   const electronSpaceHoldRef = useRef(false);
   const chromeSpaceHoldRef = useRef(false);
-  const { listenEnabled } = useOnniVoicePrefs();
   const { user } = useAuth();
   const [appRole, setAppRole] = useState<string | null>(null);
 
@@ -145,58 +140,6 @@ export default function OpAiAssistant() {
           appRole: roleForCommand,
         });
 
-        if (isOnniNavigationResult(result)) {
-          sessionRef.current.lastAnswer = result.answer;
-
-          if (result.navigateBack) {
-            navigate(-1);
-          } else if (result.navigateTo) {
-            const [path, hash] = result.navigateTo.split("#");
-            if (hash) {
-              navigate(path);
-              window.setTimeout(() => {
-                document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }, 400);
-            } else {
-              navigate(result.navigateTo);
-            }
-          }
-          if (result.command) {
-            const isDocenteVoiceCmd =
-              result.command.type === "docente.startClass" ||
-              result.command.type === "docente.enterClass" ||
-              result.command.type === "docente.endClass";
-            const needsMountDelay = Boolean(result.navigateTo) && isDocenteVoiceCmd;
-            const dispatchDelay = needsMountDelay ? 1_000 : isDocenteVoiceCmd ? 300 : 0;
-            window.setTimeout(() => dispatchOpCommand(result.command!), dispatchDelay);
-          }
-          appendAssistantAnswer(setMessages, sessionRef, result.answer, speakAnswer);
-          return result.answer;
-        }
-
-        const aiAnswer = await askOnniGemini({
-          message: trimmed,
-          contextPath: location.pathname,
-        });
-        if (aiAnswer) {
-          appendAssistantAnswer(setMessages, sessionRef, aiAnswer, speakAnswer, { fromGemini: true });
-          return aiAnswer;
-        }
-
-        const wikiTopic = extractWikipediaTopic(trimmed);
-        if (wikiTopic) {
-          try {
-            const wiki = await fetchWikipediaSummary(wikiTopic);
-            const shortAnswer = wiki
-              ? `${wiki.title}: ${wiki.shortText}`
-              : "No encontré un resultado claro en Wikipedia para eso. Prueba con otro nombre.";
-            appendAssistantAnswer(setMessages, sessionRef, shortAnswer, speakAnswer);
-            return shortAnswer;
-          } catch {
-            /* Wikipedia falló; seguimos con la respuesta local */
-          }
-        }
-
         sessionRef.current.lastAnswer = result.answer;
         appendAssistantAnswer(setMessages, sessionRef, result.answer, speakAnswer);
         return result.answer;
@@ -204,7 +147,7 @@ export default function OpAiAssistant() {
         setProcessing(false);
       }
     },
-    [location.pathname, navigate, speakAnswer, user?.id],
+    [location.pathname, speakAnswer, user?.id],
   );
 
   runCommandRef.current = runCommand;
@@ -302,12 +245,8 @@ export default function OpAiAssistant() {
     electronMicEndHold,
   ]);
 
-  const wakeWordActive =
-    isDesktopWebBrowser() &&
-    listenEnabled &&
-    canListen &&
-    !processing &&
-    !voiceCaptureActive;
+  // En web dejamos Onni en modo push-to-talk (Espacio), sin wake-word continuo.
+  const wakeWordActive = false;
 
   const captureMicActive = voiceCaptureActive;
 

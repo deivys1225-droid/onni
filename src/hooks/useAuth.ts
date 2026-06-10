@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { supabasePublicUrl } from "@/integrations/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import { ensureProfileRowForUser } from "@/lib/profile";
 import { clearLocalUser, isLocalUser, readLocalUser } from "@/lib/localAuth";
@@ -20,11 +21,14 @@ const AUTH_BOOT_TIMEOUT_MS = 1500;
  */
 function readPersistedSupabaseUser(): User | null {
   if (typeof window === "undefined") return null;
+  const projectRef =
+    supabasePublicUrl.match(/^https:\/\/([a-z0-9-]+)\.supabase\.co$/i)?.[1] ?? null;
   try {
     for (let i = 0; i < window.localStorage.length; i++) {
       const key = window.localStorage.key(i);
       if (!key) continue;
       if (!key.startsWith("sb-") || !key.endsWith("-auth-token")) continue;
+      if (projectRef && !key.includes(`sb-${projectRef}-auth-token`)) continue;
       const raw = window.localStorage.getItem(key);
       if (!raw) continue;
       const parsed = JSON.parse(raw) as
