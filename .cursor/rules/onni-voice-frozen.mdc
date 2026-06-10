@@ -1,0 +1,62 @@
+---
+description: Candado — micrófono y voz Onni (PC .exe, Chrome, Android); intocable sin orden explícita
+alwaysApply: true
+---
+
+# Micrófono / voz Onni — congelado (candado)
+
+El usuario **validó y restauró desde Vercel** el micrófono y la voz en **OnniVers PC (.exe)**, **Chrome (escritorio)** y **celular (APK Android)**. Trata todo lo relacionado como **solo lectura** salvo petición **explícita** que nombre **exactamente** qué archivo y qué cambio.
+
+## Prohibido sin orden explícita
+
+- Añadir, quitar o “arreglar” switch, wake word, push-to-talk, STT/TTS, permisos de mic, bridges Electron o lógica Azure de voz.
+- Revertir, restaurar commits viejos, force-push o “limpiar” código de mic “roto” por iniciativa del agente.
+- Unificar/refactorizar voz entre plataformas (Chrome ≠ .exe ≠ Android).
+- Tocar `OpAiAssistant.tsx` por voz/mic si el pedido del usuario es otra cosa (UI del chat, navegación, Gemini, etc.).
+
+## Rutas protegidas — PC (.exe)
+
+| Área | Archivos |
+|------|----------|
+| UI mic .exe | `src/components/OpAiElectronAzureMic.tsx` |
+| Bridge TTS / Electron | `src/lib/onniElectronVoiceBridge.ts` |
+| STT legacy Electron | `src/lib/onniElectronWhisperStt.ts`, `src/lib/onniElectronStt.ts` |
+| Proceso Electron | `electron/main.cjs`, `electron/preload.cjs`, `electron/winSpeechEngine.cjs`, `electron/whisperEngine.cjs` |
+
+## Rutas protegidas — Chrome (navegador escritorio)
+
+| Área | Archivos |
+|------|----------|
+| Wake «Hola Onni» / prefs | `src/hooks/useOnniVoice.ts` |
+| Captura web | `src/lib/onniWebVoiceCapture.ts` |
+| Runtime / modo voz | `src/lib/onniVoiceRuntime.ts`, `src/lib/onniVoice.ts` |
+
+## Rutas protegidas — celular (Android)
+
+| Área | Archivos |
+|------|----------|
+| UI mic Azure APK | `src/components/OpAiAndroidAzureMic.tsx` |
+| Hook Azure mic | `src/hooks/useOnniAzureMic.ts` |
+
+## Rutas compartidas (todas las plataformas)
+
+| Área | Archivos |
+|------|----------|
+| Asistente Onni (bloques voz/mic) | `src/components/OpAiAssistant.tsx` — hooks `useOnniChatVoice`, `useOnniVoice`, mic Android/Electron, switch, botones mic/volumen |
+| Orquestación chat + voz | `src/hooks/useOnniChatVoice.ts` |
+| Azure STT/TTS servidor | `api/azure/speech-stt.js`, `api/azure/speech-tts.js` |
+| Cliente Azure | `src/lib/onniAzureStt.ts`, `src/lib/onniAzureTts.ts` |
+| Permisos mic | `src/lib/requestOnniMicrophone.ts`, `src/lib/onniNativeVoiceErrors.ts` |
+| Detección plataforma | `src/lib/deviceDetection.ts` — funciones `isElectronDesktopApp`, `isDesktopWebBrowser`, `isOnniAndroidVoice` |
+| Tests mic | `src/test/requestOnniMicrophone.test.ts` |
+
+## Comportamiento por plataforma (no mezclar)
+
+- **Chrome:** switch «Hola Onni» / Web Speech API — **no** copiar lógica del .exe ni desactivarla al “arreglar” PC.
+- **.exe:** mic push-to-talk + Azure según versión validada en Vercel — **no** reintroducir switch, Whisper ni WinSpeech sin pedido explícito.
+- **Android:** mic Azure en APK — **no** alterar al tocar PC o Chrome.
+
+## Si el usuario pide otra cosa
+
+- Alcance **mínimo**; si el diff puede tocar la tabla anterior, **no modificar** esas rutas o **pedir confirmación** antes.
+- **No** commit ni push de voz/mic sin que el usuario lo pida explícitamente.

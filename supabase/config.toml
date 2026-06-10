@@ -1,0 +1,27 @@
+# Debe coincidir con el subdominio de VITE_SUPABASE_URL (ref antes de .supabase.co)
+project_id = "rwyhakcsvdbsavignogh"
+
+[auth]
+enabled = true
+# URL principal del sitio (emails, OAuth redirect). Dominio activo: onnivers.com
+site_url = "https://onnivers.com"
+# URLs exactas permitidas tras login OAuth / magic link (debe coincidir con getOAuthRedirectUrl)
+additional_redirect_urls = [
+  "https://onnivers.com",
+  "https://onnivers.com/",
+  "https://onnivers.com/entrar",
+  "https://www.onnivers.com",
+  "https://www.onnivers.com/",
+  "https://www.onnivers.com/entrar",
+  "http://localhost:5173",
+  "http://localhost:5173/",
+  "http://localhost:5173/entrar",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5173/entrar",
+]
+
+[functions.onni-stt]
+verify_jwt = false
+
+[functions.onni-gemini]
+verify_jwt = false

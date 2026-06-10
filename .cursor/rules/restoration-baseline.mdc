@@ -1,0 +1,60 @@
+---
+description: Punto de restauración principal — no romper el proyecto ni cambios amplios sin orden explícita
+alwaysApply: true
+---
+
+# Punto de restauración principal (mayo 2026)
+
+El usuario validó el proyecto **funcionando** (dev local, emisión/recepción, flujos críticos). Este estado es la **línea base de restauración** más importante.
+
+## Restaurar en Git
+
+- **Etiqueta:** `restauracion-principal-2026-05-11`
+- **Comando:** `git checkout restauracion-principal-2026-05-11` (o el commit al que apunta la etiqueta)
+
+## Reglas para el agente
+
+- **No** eliminar archivos, módulos o rutas “por limpieza”, ni refactors amplios que puedan dejar pantalla en blanco o romper imports.
+- **No** cambiar de golpe `vite.config.ts`, `index.html`, entrada `src/main.tsx` / `App.tsx`, ni borrar utilidades referenciadas (p. ej. `src/lib/audiencePlayback.ts`).
+- **No** revertir ni reintroducir UI o flujos que el usuario pidió quitar o congelar en sesiones anteriores.
+- Cambios **solo** acotados a lo que el usuario pida **de forma explícita**; si el alcance es grande, **confirmar** antes de tocar la base.
+- Complementa el candado en `streaming-frozen.mdc` (Agora, Android, salas en vivo).
+
+## Baseline estable de aulas en vivo (31 mayo 2026)
+
+El usuario validó en PC (docente + estudiante en navegadores distintos) que este flujo está funcionando:
+
+- creación/edición de clases desde `DocenteClasesPage`
+- sincronización de recursos `mp4/pdf/glb` en sesión en vivo
+- entrada de estudiante leyendo estado actualizado de la clase activa
+- escena Coliseo cargando contenido actual sin romper el canvas
+
+### Restaurar este baseline
+
+- **Etiqueta:** `restauracion-aulas-live-2026-05-31`
+- **Comando:** `git checkout restauracion-aulas-live-2026-05-31`
+
+### Candado de este baseline
+
+- **No** romper la sincronización entre plantilla y `state_snapshot` de `clase_sesiones`.
+- **No** cambiar el flujo de guardado/inicio de clase sin pedido explícito del usuario.
+- **No** reintroducir links/recursos viejos por fallback automático si hay sesión en vivo.
+
+## Baseline estable extendido (1 junio 2026)
+
+El usuario validó y publicó en producción estos comportamientos; quedan **congelados** salvo orden explícita:
+
+- Playlist de videos persistente en `DocenteClasesPage` y `ClaseVirtualEntryPage` (sin perder items al guardar/recargar).
+- Sincronización en tiempo real docente → alumnos para `play / pausa / siguiente / anterior` en `ColiseoBrowserPanel`.
+- Panel docente de conectados en `AgoraClassVoiceBridge` (presencia realtime de participantes).
+- Flecha de regreso por rol en `ColiseoPage`:
+  - docente -> `/docente-clases`
+  - alumno -> `/clase/{slug}` (fallback `navigate(-1)`).
+- Registro con rol seleccionable en `RegisterPage` (`particular`, `estudiante`, `docente`) y persistencia de `app_role` en Auth metadata + `profiles` (`profile.ts`).
+
+### Candado de este baseline extendido
+
+- **No** cambiar canales, nombres de eventos o flujo de broadcast de sincronización de video sin aprobación explícita.
+- **No** revertir el selector de rol de registro ni su persistencia en `profiles.app_role`.
+- **No** volver a redirigir a alumnos al panel docente desde Coliseo.
+- Cualquier mejora nueva debe ser incremental y sin romper estos flujos ya validados.

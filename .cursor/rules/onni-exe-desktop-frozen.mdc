@@ -1,0 +1,53 @@
+---
+description: Candado — OnniVers .exe validado (Espacio=mic, scroll mouse, Azure, Electron); intocable sin autorización explícita
+alwaysApply: true
+---
+
+# OnniVers PC (.exe) — configuración validada (junio 2026)
+
+El usuario **validó** el `.exe` con este comportamiento. **No modificar** nada de la tabla inferior sin **autorización explícita** que nombre **archivo(s) y cambio concreto**. Si un pedido del usuario **podría afectar** alguna ruta protegida, **avisar antes** y **no tocar** hasta confirmación.
+
+## Punto de restauración Git
+
+- **Commit:** `55cd8df` (`fix(onni-exe): scroll solo con mouse, no con teclado`)
+- **Etiqueta:** `onni-exe-validado-2026-06-01`
+- **Restaurar:** `git checkout onni-exe-validado-2026-06-01`
+
+Incluye también `a00ed5a` (Espacio = mic con chat cerrado).
+
+## Comportamiento congelado (no cambiar)
+
+1. **Carga:** Electron abre `https://onnivers.com` (`electron/main.cjs`, `START_URL`).
+2. **Mic .exe:** clip del micrófono = **mantener pulsado** graba, **soltar** transcribe y envía (`OpAiElectronAzureMic` + `useOnniAzureMic` + Azure STT).
+3. **Espacio:** con chat de Onni **cerrado** y ventana del .exe **visible**, **mantener Espacio** = mismo flujo que el clip del mic; **no** atajo global ni con app minimizada.
+4. **Scroll:** solo **rueda del mouse** en .exe; teclado **no** desplaza la página. **Chrome no se modifica** (voz Web Speech / «Hola Onni» sin Azure).
+5. **TTS .exe:** respuesta por voz vía bridge speak-only (`onniElectronVoiceBridge.ts`); **no** reintroducir Whisper/WinSpeech/switch wake sin orden explícita.
+6. **Build:** scripts `desktop:*` y bloque `build` de `package.json` (electron-builder).
+
+## Archivos protegidos — avisar si el diff los toca
+
+| Área | Archivos |
+|------|----------|
+| Proceso / ventana | `electron/main.cjs`, `electron/preload.cjs` |
+| Motores voz legacy | `electron/winSpeechEngine.cjs`, `electron/whisperEngine.cjs`, `electron/onni-win-speech/**` |
+| UI mic + Espacio | `src/components/OpAiElectronAzureMic.tsx`, `src/components/OpAiAssistant.tsx` (bloques `showElectronMic`, mic hold, Espacio) — **solo .exe** |
+| Scroll solo mouse | `src/lib/electronMouseOnlyScroll.ts`, `src/App.tsx` (`installElectronMouseOnlyScroll`) |
+| Azure STT mic | `src/hooks/useOnniAzureMic.ts`, `src/lib/onniAzureStt.ts` |
+| Orquestación voz chat | `src/hooks/useOnniChatVoice.ts`, `src/lib/onniElectronVoiceBridge.ts` |
+| Permisos / detección | `src/lib/requestOnniMicrophone.ts`, `src/lib/deviceDetection.ts` (`isElectronDesktopApp`) |
+| APIs Azure | `api/azure/speech-stt.js`, `api/azure/speech-tts.js` |
+| Empaquetado | `package.json` (`main`, `build`, scripts `desktop:*`), `scripts/generate-desktop-icon.mjs`, `scripts/build-win-speech.mjs`, `scripts/setup-whisper.mjs`, `scripts/apply-desktop-icon.mjs` |
+
+Complementa `onni-voice-frozen.mdc` (mic/voz en todas las plataformas).
+
+## Prohibido sin autorización explícita
+
+- Quitar, alterar o “simplificar” Espacio-mic, scroll solo mouse, push-to-hold del mic, o carga remota onnivers.com.
+- Refactors que muevan lógica .exe fuera de los archivos listados.
+- Commit/push de cambios en rutas protegidas sin que el usuario lo pida **y** confirme el alcance.
+
+## Si el usuario pide otra cosa
+
+- Alcance **mínimo**; si el diff puede tocar la tabla, **parar y avisar** qué archivo/línea se vería afectada.
+- No mezclar arreglos de web/APK/Android con cambios del .exe en el mismo diff salvo pedido explícito.
+- **Chrome / navegador:** voz con Web Speech y switch «Hola Onni» — **no** añadir Azure STT, Espacio-mic ni cambiar `canListen` sin autorización explícita aparte del .exe.

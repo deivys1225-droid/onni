@@ -1,0 +1,28 @@
+---
+description: Candado — streaming, túneles WebView, SelectorActivity; no tocar sin orden explícita
+alwaysApply: true
+---
+
+# Streaming / Agora / Android — congelado (candado)
+
+La emisión, la recepción en vivo, los **túneles** WebView ↔ JS, **`SelectorActivity`** y el flujo AR (`window.Android`) **están validados**. Trátalos como **solo lectura** para el agente salvo petición explícita del usuario que nombre exactamente qué cambiar.
+
+## No modificar sin orden explícita
+
+- Flujo Agora (tokens, join, audiencia, tracks), `joinAudienceRoom`, `mountFirstRemoteUser`, `leaveAudienceRoom`.
+- Puente **`AndroidBridge`**, **`AndroidJsApi` (`window.Android`)**, **`AndroidScene`**, **`__onniversoNativeDispatch`**, interceptación `WebViewClient` / `resolvePlaybackUrl` / `openAudienceSelector` / **`SelectorActivity`** en `MainActivity.java`.
+- No “limpiar”, renombrar ni refactorizar esos archivos por estilo.
+
+## Áreas especialmente protegidas
+
+| Área | Rutas típicas |
+|------|----------------|
+| Audiencia / sala espectador (lógica stream) | `src/pages/EspectadorView.tsx` — solo editar si el usuario pide cambio UI explícito que no rompa lo anterior |
+| Emisión / host | `src/components/AgoraLiveStreaming.tsx` |
+| Canales Agora | `src/lib/agoraRooms.ts` |
+| Entrada a salas | `src/pages/NuestrasSalasPage.tsx` (solo enlaces a vivo si el usuario lo pide) |
+| Android WebView / selector | `android/.../MainActivity.java`, `android/.../SelectorActivity.java`, `AndroidManifest.xml` (puentes y actividades de escena) |
+
+## Si el usuario pide otra cosa
+
+Limita el alcance al mínimo; si el cambio puede tocar la tabla, **confirma** o **no modifiques** esas rutas.
