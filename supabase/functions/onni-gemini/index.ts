@@ -8,7 +8,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const DEFAULT_MODEL = "gemini-2.5-flash";
+const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL")?.trim() || "gpt-4o-mini";
+const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL")?.trim() || "gemini-2.5-flash";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -19,9 +20,9 @@ function json(body: unknown, status = 200) {
 
 function buildSystemPrompt(contextPath: string): string {
   return [
-    "Eres Onni, la asistente de OnniVerso. Estás impulsada por Google Gemini y SÍ estás conectada a esa IA.",
-    "Si preguntan si usas Gemini o si estás conectada, responde afirmativamente (sí, uso Google Gemini).",
-    "NUNCA digas que no estás conectada a Gemini ni que solo usas reglas.",
+    "Eres Onni, la asistente de OnniVerso. Respondes con ChatGPT (OpenAI); Gemini solo es respaldo si falla OpenAI.",
+    "Si preguntan qué IA usas, di que usas ChatGPT (OpenAI) y, si hace falta, Gemini como respaldo.",
+    "NUNCA digas que solo usas reglas fijas sin IA.",
     `El usuario está en la ruta: ${contextPath || "/"}.`,
     "OnniVerso es una plataforma de experiencias inmersivas; no enumeres secciones salvo que pregunten explícitamente qué hay o dónde ir.",
     "No tienes resultados en vivo de partidos deportivos ni noticias del día.",
@@ -29,6 +30,21 @@ function buildSystemPrompt(contextPath: string): string {
     "NUNCA listes lobby, conciertos, tienda, Coliseo, aulas ni opciones de menú en saludos o respuestas genéricas.",
     "NO cierres invitando a elegir una sección ni con «dime cuál te interesa». Responde solo lo preguntado.",
   ].join("\n");
+}
+
+function cleanAnswer(raw: string): string {
+  let answer = raw.trim();
+  answer = answer
+    .replace(/\n\s*si necesitas explorar[\s\S]*$/i, "")
+    .replace(/\n\s*recuerda que tambi[eé]n puedes[\s\S]*$/i, "")
+    .replace(/\n\s*(para navegar|comandos como|tambien puedes usar)[\s\S]*$/i, "")
+    .replace(/\ben onniverso (tenemos|ofrece|cuenta con)[\s\S]*$/i, "")
+    .replace(/[\s\S]*\bdime cu[aá]l te interesa\b[\s\S]*$/i, "")
+    .trim();
+  if (!answer || /\b(lobby 3d|conciertos en vivo|coliseo 360|aulas virtuales)\b/i.test(answer)) {
+    return "¡Hola! Soy Onni, tu copiloto en OnniVerso.";
+  }
+  return answer;
 }
 
 function extractGeminiText(payload: unknown): string {
@@ -45,6 +61,75 @@ function extractGeminiText(payload: unknown): string {
     .trim();
 }
 
+async function askOpenAI(message: string, contextPath: string, apiKey: string) {
+  const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      temperature: 0.65,
+      max_tokens: 512,
+      messages: [
+        { role: "system", content: buildSystemPrompt(contextPath) },
+        { role: "user", content: message },
+      ],
+    }),
+  });
+
+  const openaiJson = await openaiRes.json();
+  if (!openaiRes.ok) {
+    const errMsg =
+      (openaiJson as { error?: { message?: string } })?.error?.message ??
+      `OpenAI API error (${openaiRes.status})`;
+    throw new Error(errMsg);
+  }
+
+  const rawAnswer = (openaiJson as { choices?: { message?: { content?: string } }[] })
+    ?.choices?.[0]?.message?.content?.trim() ?? "";
+  if (!rawAnswer) throw new Error("OpenAI returned an empty response");
+  return { answer: cleanAnswer(rawAnswer), model: OPENAI_MODEL, provider: "openai" };
+}
+
+async function askGemini(message: string, contextPath: string, apiKey: string) {
+  const geminiRes = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: {
+          parts: [{ text: buildSystemPrompt(contextPath) }],
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: message }],
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens: 512,
+          temperature: 0.65,
+        },
+      }),
+    },
+  );
+
+  const geminiJson = await geminiRes.json();
+  if (!geminiRes.ok) {
+    const errMsg =
+      (geminiJson as { error?: { message?: string } })?.error?.message ??
+      `Gemini API error (${geminiRes.status})`;
+    throw new Error(errMsg);
+  }
+
+  const rawAnswer = extractGeminiText(geminiJson);
+  if (!rawAnswer) throw new Error("Gemini returned an empty response");
+  return { answer: cleanAnswer(rawAnswer), model: GEMINI_MODEL, provider: "gemini" };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -54,11 +139,6 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get("GEMINI_API_KEY")?.trim() ?? "";
-    if (!apiKey) {
-      return json({ error: "Missing GEMINI_API_KEY in Supabase Edge secrets" }, 500);
-    }
-
     const body = (await req.json()) as GeminiRequest;
     const message = body.message?.trim() ?? "";
     if (!message) {
@@ -66,57 +146,35 @@ Deno.serve(async (req) => {
     }
 
     const contextPath = body.contextPath?.trim() || "/";
-    const model = Deno.env.get("GEMINI_MODEL")?.trim() || DEFAULT_MODEL;
-    const systemPrompt = buildSystemPrompt(contextPath);
+    const openaiKey = Deno.env.get("OPENAI_API_KEY")?.trim() ?? "";
+    const geminiKey = Deno.env.get("GEMINI_API_KEY")?.trim() ?? "";
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: {
-            parts: [{ text: systemPrompt }],
-          },
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: message }],
-            },
-          ],
-          generationConfig: {
-            maxOutputTokens: 512,
-            temperature: 0.65,
-          },
-        }),
-      },
+    if (openaiKey) {
+      try {
+        const result = await askOpenAI(message, contextPath, openaiKey);
+        return json(result);
+      } catch (openaiError) {
+        if (!geminiKey) {
+          const messageText = openaiError instanceof Error ? openaiError.message : "OpenAI error";
+          return json({ error: messageText }, 502);
+        }
+      }
+    }
+
+    if (geminiKey) {
+      try {
+        const result = await askGemini(message, contextPath, geminiKey);
+        return json(result);
+      } catch (geminiError) {
+        const messageText = geminiError instanceof Error ? geminiError.message : "Gemini error";
+        return json({ error: messageText }, 502);
+      }
+    }
+
+    return json(
+      { error: "Missing OPENAI_API_KEY (or GEMINI_API_KEY) in Supabase Edge secrets" },
+      500,
     );
-
-    const geminiJson = await geminiRes.json();
-    if (!geminiRes.ok) {
-      const errMsg =
-        (geminiJson as { error?: { message?: string } })?.error?.message ??
-        `Gemini API error (${geminiRes.status})`;
-      return json({ error: errMsg }, geminiRes.status >= 500 ? 502 : geminiRes.status);
-    }
-
-    const rawAnswer = extractGeminiText(geminiJson);
-    if (!rawAnswer) {
-      return json({ error: "Gemini returned an empty response" }, 502);
-    }
-
-    let answer = rawAnswer
-      .replace(/\n\s*si necesitas explorar[\s\S]*$/i, "")
-      .replace(/\n\s*recuerda que tambi[eé]n puedes[\s\S]*$/i, "")
-      .replace(/\n\s*(para navegar|comandos como|tambien puedes usar)[\s\S]*$/i, "")
-      .replace(/\ben onniverso (tenemos|ofrece|cuenta con)[\s\S]*$/i, "")
-      .replace(/[\s\S]*\bdime cu[aá]l te interesa\b[\s\S]*$/i, "")
-      .trim();
-    if (!answer || /\b(lobby 3d|conciertos en vivo|coliseo 360|aulas virtuales)\b/i.test(answer)) {
-      answer = "¡Hola! Soy Onni, tu copiloto en OnniVerso.";
-    }
-
-    return json({ answer, model });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return json({ error: message }, 500);

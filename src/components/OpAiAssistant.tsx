@@ -192,7 +192,7 @@ export default function OpAiAssistant() {
 
         if (asksAboutGemini) {
           const fallbackGemini =
-            "Sí, estoy conectada a Google Gemini para preguntas libres. Ahora mismo la API no respondió (cuota o red); inténtalo de nuevo en un minuto.";
+            "Sí, estoy conectada a ChatGPT (OpenAI) y uso Gemini como respaldo. Ahora mismo la API no respondió (cuota o red); inténtalo de nuevo en un minuto.";
           appendAssistantAnswer(setMessages, sessionRef, fallbackGemini, speakAnswer, { fromGemini: true });
           return fallbackGemini;
         }
