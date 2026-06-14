@@ -581,10 +581,9 @@ function rotateZ(p: Vec3, a: number): Vec3 {
   return { x: p.x * c - p.y * s, y: p.x * s + p.y * c, z: p.z };
 }
 
-const AURORA_RAY_COUNT = 18;
 const AURORA_RIBBON_COUNT = 4;
 
-/** Líneas aurora blancas desde el centro — visibles sobre y alrededor de la figura. */
+/** Cintas aurora curvas alrededor de la figura (sin rayos rectos desde el centro). */
 function drawAuroraRays(
   ctx: CanvasRenderingContext2D,
   cx: number,
@@ -596,7 +595,6 @@ function drawAuroraRays(
 ) {
   const baseAlpha =
     state === "listening" ? 0.82 : state === "speaking" ? 0.76 : 0.62;
-  const rot = elapsed * 0.00028;
   const pulse = 1 + Math.sin(elapsed * 0.0018) * 0.08;
   const maxLen = canvasRadius * 0.92 * pulse;
   const innerStart = shapeRadius * 0.12;
@@ -606,54 +604,6 @@ function drawAuroraRays(
   ctx.lineJoin = "round";
   ctx.shadowColor = "rgba(255, 255, 255, 0.95)";
   ctx.shadowBlur = 10;
-
-  for (let i = 0; i < AURORA_RAY_COUNT; i += 1) {
-    const phase = i * 2.173 + elapsed * 0.00085;
-    const angle =
-      rot + (i / AURORA_RAY_COUNT) * Math.PI * 2 + Math.sin(phase) * 0.16;
-    const len = maxLen * (0.78 + Math.sin(elapsed * 0.0011 + i * 1.63) * 0.2);
-    const waveAmp = maxLen * 0.055 * (0.7 + Math.sin(phase * 1.3) * 0.3);
-    const perp = angle + Math.PI / 2;
-
-    const startX = cx + Math.cos(angle) * innerStart;
-    const startY = cy + Math.sin(angle) * innerStart;
-    const endX = cx + Math.cos(angle) * len;
-    const endY = cy + Math.sin(angle) * len;
-    const midDist = innerStart + (len - innerStart) * 0.52;
-    const wave = Math.sin(elapsed * 0.0022 + i * 0.91) * waveAmp;
-    const midX = cx + Math.cos(angle) * midDist + Math.cos(perp) * wave;
-    const midY = cy + Math.sin(angle) * midDist + Math.sin(perp) * wave;
-
-    const rayAlpha = baseAlpha * (0.78 + Math.sin(elapsed * 0.0016 + i * 0.55) * 0.22);
-    const grad = ctx.createLinearGradient(startX, startY, endX, endY);
-    grad.addColorStop(0, `rgba(255, 255, 255, ${rayAlpha * 0.35})`);
-    grad.addColorStop(0.18, `rgba(255, 255, 255, ${rayAlpha * 0.95})`);
-    grad.addColorStop(0.55, `rgba(255, 255, 255, ${rayAlpha * 0.55})`);
-    grad.addColorStop(1, "rgba(255, 255, 255, 0)");
-
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.quadraticCurveTo(midX, midY, endX, endY);
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = i % 3 === 0 ? 1.6 : 1.05;
-    ctx.globalAlpha = 0.92;
-    ctx.globalCompositeOperation = "screen";
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(startX, startY);
-    ctx.quadraticCurveTo(midX, midY, endX, endY);
-    ctx.globalAlpha = 0.38;
-    ctx.lineWidth = (i % 3 === 0 ? 1.6 : 1.05) + 2.5;
-    ctx.shadowBlur = 18;
-    ctx.strokeStyle = `rgba(255, 255, 255, ${rayAlpha * 0.5})`;
-    ctx.stroke();
-    ctx.shadowBlur = 10;
-  }
-
-  ctx.globalCompositeOperation = "source-over";
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = 8;
 
   for (let r = 0; r < AURORA_RIBBON_COUNT; r += 1) {
     const ribbonPhase = elapsed * 0.0005 + r * 2.07;

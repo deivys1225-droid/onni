@@ -1,4 +1,4 @@
-type GeminiRequest = {
+type OnniChatRequest = {
   message?: string;
   contextPath?: string;
 };
@@ -8,8 +8,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const OPENAI_MODEL = Deno.env.get("OPENAI_MODEL")?.trim() || "gpt-4o-mini";
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL")?.trim() || "gemini-2.5-flash";
+const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
+const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -20,10 +20,8 @@ function json(body: unknown, status = 200) {
 
 function buildSystemPrompt(contextPath: string): string {
   return [
-    "Eres Onni, la asistente de OnniVerso. Tu motor principal es ChatGPT (OpenAI).",
-    "IMPORTANTE: NUNCA digas «uso Google Gemini», «soy Gemini» ni «impulsada por Gemini» como respuesta principal.",
-    "Si preguntan si usas ChatGPT, Gemini u otra IA, responde SIEMPRE: «Sí, uso ChatGPT (OpenAI)».",
-    "Gemini solo existe como respaldo técnico si OpenAI falla; no lo menciones salvo que pregunten explícitamente por un respaldo.",
+    "Eres Onni, la asistente de OnniVerso. Respondes con modelos de IA a través de OpenRouter.",
+    "Si preguntan qué IA usas, responde: «Uso modelos de IA a través de OpenRouter».",
     "NUNCA digas que solo usas reglas fijas sin IA.",
     `El usuario está en la ruta: ${contextPath || "/"}.`,
     "OnniVerso es una plataforma de experiencias inmersivas; no enumeres secciones salvo que pregunten explícitamente qué hay o dónde ir.",
@@ -49,29 +47,23 @@ function cleanAnswer(raw: string): string {
   return answer;
 }
 
-function extractGeminiText(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "";
-  const candidates = (payload as { candidates?: unknown[] }).candidates;
-  if (!Array.isArray(candidates) || candidates.length === 0) return "";
-  const parts = (candidates[0] as { content?: { parts?: unknown[] } })?.content?.parts;
-  if (!Array.isArray(parts)) return "";
-  return parts
-    .map((part) => (part && typeof part === "object" && typeof (part as { text?: string }).text === "string"
-      ? (part as { text: string }).text
-      : ""))
-    .join("")
-    .trim();
-}
+async function askOpenRouter(message: string, contextPath: string, apiKey: string) {
+  const model = Deno.env.get("OPENROUTER_MODEL")?.trim() || DEFAULT_OPENROUTER_MODEL;
+  const siteUrl = Deno.env.get("OPENROUTER_SITE_URL")?.trim() || "https://onnivers.com";
+  const siteTitle = Deno.env.get("OPENROUTER_SITE_TITLE")?.trim() || "OnniVerso";
 
-async function askOpenAI(message: string, contextPath: string, apiKey: string) {
-  const openaiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${apiKey}`,
+  };
+  if (siteUrl) headers["HTTP-Referer"] = siteUrl;
+  if (siteTitle) headers["X-Title"] = siteTitle;
+
+  const openRouterRes = await fetch(OPENROUTER_API_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers,
     body: JSON.stringify({
-      model: OPENAI_MODEL,
+      model,
       temperature: 0.65,
       max_tokens: 512,
       messages: [
@@ -81,55 +73,21 @@ async function askOpenAI(message: string, contextPath: string, apiKey: string) {
     }),
   });
 
-  const openaiJson = await openaiRes.json();
-  if (!openaiRes.ok) {
+  const openRouterJson = await openRouterRes.json();
+  if (!openRouterRes.ok) {
     const errMsg =
-      (openaiJson as { error?: { message?: string } })?.error?.message ??
-      `OpenAI API error (${openaiRes.status})`;
+      (openRouterJson as { error?: { message?: string } })?.error?.message ??
+      `OpenRouter API error (${openRouterRes.status})`;
     throw new Error(errMsg);
   }
 
-  const rawAnswer = (openaiJson as { choices?: { message?: { content?: string } }[] })
+  const rawAnswer = (openRouterJson as { choices?: { message?: { content?: string } }[] })
     ?.choices?.[0]?.message?.content?.trim() ?? "";
-  if (!rawAnswer) throw new Error("OpenAI returned an empty response");
-  return { answer: cleanAnswer(rawAnswer), model: OPENAI_MODEL, provider: "openai" };
-}
+  if (!rawAnswer) throw new Error("OpenRouter returned an empty response");
 
-async function askGemini(message: string, contextPath: string, apiKey: string) {
-  const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: buildSystemPrompt(contextPath) }],
-        },
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: message }],
-          },
-        ],
-        generationConfig: {
-          maxOutputTokens: 512,
-          temperature: 0.65,
-        },
-      }),
-    },
-  );
-
-  const geminiJson = await geminiRes.json();
-  if (!geminiRes.ok) {
-    const errMsg =
-      (geminiJson as { error?: { message?: string } })?.error?.message ??
-      `Gemini API error (${geminiRes.status})`;
-    throw new Error(errMsg);
-  }
-
-  const rawAnswer = extractGeminiText(geminiJson);
-  if (!rawAnswer) throw new Error("Gemini returned an empty response");
-  return { answer: cleanAnswer(rawAnswer), model: GEMINI_MODEL, provider: "gemini" };
+  const resolvedModel =
+    String((openRouterJson as { model?: string }).model ?? model).trim() || model;
+  return { answer: cleanAnswer(rawAnswer), model: resolvedModel, provider: "openrouter" };
 }
 
 Deno.serve(async (req) => {
@@ -141,42 +99,27 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const body = (await req.json()) as GeminiRequest;
+    const body = (await req.json()) as OnniChatRequest;
     const message = body.message?.trim() ?? "";
     if (!message) {
       return json({ error: "Missing message" }, 400);
     }
 
     const contextPath = body.contextPath?.trim() || "/";
-    const openaiKey = Deno.env.get("OPENAI_API_KEY")?.trim() ?? "";
-    const geminiKey = Deno.env.get("GEMINI_API_KEY")?.trim() ?? "";
+    const openRouterKey = Deno.env.get("OPENROUTER_API_KEY")?.trim() ?? "";
 
-    if (openaiKey) {
-      try {
-        const result = await askOpenAI(message, contextPath, openaiKey);
-        return json(result);
-      } catch (openaiError) {
-        if (!geminiKey) {
-          const messageText = openaiError instanceof Error ? openaiError.message : "OpenAI error";
-          return json({ error: messageText }, 502);
-        }
-      }
+    if (!openRouterKey) {
+      return json({ error: "Missing OPENROUTER_API_KEY in Supabase Edge secrets" }, 500);
     }
 
-    if (geminiKey) {
-      try {
-        const result = await askGemini(message, contextPath, geminiKey);
-        return json(result);
-      } catch (geminiError) {
-        const messageText = geminiError instanceof Error ? geminiError.message : "Gemini error";
-        return json({ error: messageText }, 502);
-      }
+    try {
+      const result = await askOpenRouter(message, contextPath, openRouterKey);
+      return json(result);
+    } catch (openRouterError) {
+      const messageText =
+        openRouterError instanceof Error ? openRouterError.message : "OpenRouter error";
+      return json({ error: messageText }, 502);
     }
-
-    return json(
-      { error: "Missing OPENAI_API_KEY (or GEMINI_API_KEY) in Supabase Edge secrets" },
-      500,
-    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unexpected error";
     return json({ error: message }, 500);

@@ -31,14 +31,13 @@ function paypalSdkHeadPlugin(mode: string, env: Record<string, string>): Plugin 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const devChatEnv: Record<string, string> = {
-    OPENAI_API_KEY: env.OPENAI_API_KEY || env.VITE_OPENAI_API_KEY || "",
-    GEMINI_API_KEY: env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY || "",
-    OPENAI_MODEL: env.OPENAI_MODEL || env.VITE_OPENAI_MODEL || "",
-    GEMINI_MODEL: env.GEMINI_MODEL || "",
-    OLLAMA_ENABLED: env.OLLAMA_ENABLED || env.VITE_OLLAMA_ENABLED || "",
-    OLLAMA_ONLY: env.OLLAMA_ONLY || env.VITE_OLLAMA_ONLY || "",
-    OLLAMA_HOST: env.OLLAMA_HOST || env.VITE_OLLAMA_HOST || "",
-    OLLAMA_MODEL: env.OLLAMA_MODEL || env.VITE_OLLAMA_MODEL || "",
+    OPENROUTER_API_KEY: env.OPENROUTER_API_KEY || env.VITE_OPENROUTER_API_KEY || "",
+    OPENROUTER_MODEL: env.OPENROUTER_MODEL || env.VITE_OPENROUTER_MODEL || "",
+    OPENROUTER_SITE_URL: env.OPENROUTER_SITE_URL || env.VITE_SITE_URL || "",
+    OPENROUTER_SITE_TITLE: env.OPENROUTER_SITE_TITLE || "",
+    TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN || "",
+    TELEGRAM_WEBHOOK_SECRET: env.TELEGRAM_WEBHOOK_SECRET || "",
+    TELEGRAM_ALLOWED_CHAT_IDS: env.TELEGRAM_ALLOWED_CHAT_IDS || "",
     GOOGLE_CSE_API_KEY: env.GOOGLE_CSE_API_KEY || env.VITE_GOOGLE_CSE_API_KEY || "",
     GOOGLE_CSE_CX: env.GOOGLE_CSE_CX || env.VITE_GOOGLE_CSE_CX || "",
   };

@@ -1,23 +1,10 @@
-const OPENAI_MODEL = "gpt-4o-mini";
-const GEMINI_MODEL = "gemini-2.5-flash";
-const DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11434";
-const DEFAULT_OLLAMA_MODEL = "llama3.2:3b";
+const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
+const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-export function buildOnniChatSystemPrompt(contextPath, provider = "openai") {
-  const aiLine =
-    provider === "ollama"
-      ? "Si preguntan si usas ChatGPT, Gemini u otra IA, responde: «Corro localmente con Ollama (Llama 3.2) en tu equipo»."
-      : [
-          "IMPORTANTE: NUNCA digas «uso Google Gemini», «soy Gemini» ni «impulsada por Gemini» como respuesta principal.",
-          "Si preguntan si usas ChatGPT, Gemini u otra IA, responde SIEMPRE: «Sí, uso ChatGPT (OpenAI)».",
-          "Gemini solo existe como respaldo técnico si OpenAI falla; no lo menciones salvo que pregunten explícitamente por un respaldo.",
-        ].join("\n");
-
+export function buildOnniChatSystemPrompt(contextPath) {
   return [
-    provider === "ollama"
-      ? "Eres Onni, la asistente de OnniVerso. Respondes con un modelo local (Ollama / Llama 3.2) en el PC del usuario."
-      : "Eres Onni, la asistente de OnniVerso. Tu motor principal es ChatGPT (OpenAI).",
-    aiLine,
+    "Eres Onni, la asistente de OnniVerso. Respondes con modelos de IA a través de OpenRouter.",
+    "Si preguntan qué IA usas, responde: «Uso modelos de IA a través de OpenRouter».",
     "NUNCA digas que solo usas reglas fijas sin IA.",
     `El usuario está en la ruta: ${contextPath || "/"}.`,
     "OnniVerso es una plataforma de experiencias inmersivas; no enumeres secciones salvo que pregunten explícitamente qué hay o dónde ir.",
@@ -43,13 +30,17 @@ function cleanAnswer(raw) {
   return answer;
 }
 
-async function askOpenAI(message, contextPath, apiKey, model = OPENAI_MODEL) {
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+async function askOpenRouter(message, contextPath, apiKey, model, siteUrl, siteTitle) {
+  const headers = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${apiKey}`,
+  };
+  if (siteUrl) headers["HTTP-Referer"] = siteUrl;
+  if (siteTitle) headers["X-Title"] = siteTitle;
+
+  const response = await fetch(OPENROUTER_API_URL, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers,
     body: JSON.stringify({
       model,
       temperature: 0.65,
@@ -64,74 +55,14 @@ async function askOpenAI(message, contextPath, apiKey, model = OPENAI_MODEL) {
   const json = await response.json();
   if (!response.ok) {
     const errMsg =
-      json?.error?.message || json?.error?.code || `OpenAI error (${response.status})`;
+      json?.error?.message || json?.error?.code || `OpenRouter error (${response.status})`;
     throw new Error(String(errMsg));
   }
 
   const text = json?.choices?.[0]?.message?.content?.trim() ?? "";
-  if (!text) throw new Error("OpenAI devolvió una respuesta vacía.");
-  return { answer: cleanAnswer(text), model, provider: "openai" };
-}
-
-async function askGemini(message, contextPath, apiKey, model = GEMINI_MODEL) {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: buildOnniChatSystemPrompt(contextPath) }] },
-        contents: [{ role: "user", parts: [{ text: message }] }],
-        generationConfig: { maxOutputTokens: 512, temperature: 0.65 },
-      }),
-    },
-  );
-
-  const json = await response.json();
-  if (!response.ok) {
-    const errMsg = json?.error?.message || `Gemini error (${response.status})`;
-    throw new Error(String(errMsg));
-  }
-
-  const parts = json?.candidates?.[0]?.content?.parts;
-  const text = Array.isArray(parts)
-    ? parts.map((p) => (typeof p?.text === "string" ? p.text : "")).join("").trim()
-    : "";
-  if (!text) throw new Error("Gemini devolvió una respuesta vacía.");
-  return { answer: cleanAnswer(text), model, provider: "gemini" };
-}
-
-async function askOllama(message, contextPath, host, model = DEFAULT_OLLAMA_MODEL) {
-  const baseUrl = String(host || DEFAULT_OLLAMA_HOST).replace(/\/$/, "");
-  const response = await fetch(`${baseUrl}/api/chat`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      messages: [
-        { role: "system", content: buildOnniChatSystemPrompt(contextPath, "ollama") },
-        { role: "user", content: message },
-      ],
-      options: { temperature: 0.65, num_predict: 512 },
-    }),
-  });
-
-  const json = await response.json();
-  if (!response.ok) {
-    const errMsg = json?.error || `Ollama error (${response.status})`;
-    throw new Error(String(errMsg));
-  }
-
-  const text = json?.message?.content?.trim() ?? "";
-  if (!text) throw new Error("Ollama devolvió una respuesta vacía. ¿Está corriendo ollama serve?");
-  return { answer: cleanAnswer(text), model, provider: "ollama" };
-}
-
-function isTruthyEnv(value) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase() === "true";
+  if (!text) throw new Error("OpenRouter devolvió una respuesta vacía.");
+  const resolvedModel = String(json?.model || model).trim() || model;
+  return { answer: cleanAnswer(text), model: resolvedModel, provider: "openrouter" };
 }
 
 /** @param {{ message?: string, contextPath?: string }} body @param {Record<string, string | undefined>} env */
@@ -144,47 +75,21 @@ export async function runOnniChat(body, env = {}) {
   }
 
   const contextPath = String(body.contextPath ?? "/").trim() || "/";
-  const ollamaEnabled = isTruthyEnv(env.OLLAMA_ENABLED) || isTruthyEnv(env.VITE_OLLAMA_ENABLED);
-  const ollamaOnly = isTruthyEnv(env.OLLAMA_ONLY) || isTruthyEnv(env.VITE_OLLAMA_ONLY);
-  const ollamaHost =
-    env.OLLAMA_HOST?.trim() || env.VITE_OLLAMA_HOST?.trim() || DEFAULT_OLLAMA_HOST;
-  const ollamaModel =
-    env.OLLAMA_MODEL?.trim() || env.VITE_OLLAMA_MODEL?.trim() || DEFAULT_OLLAMA_MODEL;
-  const openaiKey = env.OPENAI_API_KEY?.trim() || env.VITE_OPENAI_API_KEY?.trim();
-  const geminiKey = env.GEMINI_API_KEY?.trim() || env.VITE_GEMINI_API_KEY?.trim();
-  const openaiModel = env.OPENAI_MODEL?.trim() || env.VITE_OPENAI_MODEL?.trim() || OPENAI_MODEL;
-  const geminiModel = env.GEMINI_MODEL?.trim() || GEMINI_MODEL;
+  const apiKey = env.OPENROUTER_API_KEY?.trim() || env.VITE_OPENROUTER_API_KEY?.trim();
+  const model =
+    env.OPENROUTER_MODEL?.trim() || env.VITE_OPENROUTER_MODEL?.trim() || DEFAULT_OPENROUTER_MODEL;
+  const siteUrl =
+    env.OPENROUTER_SITE_URL?.trim() || env.VITE_SITE_URL?.trim() || "https://onnivers.com";
+  const siteTitle = env.OPENROUTER_SITE_TITLE?.trim() || "OnniVerso";
 
-  if (ollamaEnabled) {
-    try {
-      return { ok: true, ...(await askOllama(message, contextPath, ollamaHost, ollamaModel)) };
-    } catch (ollamaError) {
-      // Si hay proveedores cloud configurados, permitimos fallback aunque ollamaOnly esté activo,
-      // para evitar que el chat quede bloqueado cuando Ollama local no está disponible.
-      if (!openaiKey && !geminiKey) throw ollamaError;
-      if (ollamaOnly) {
-        console.warn("[Onni AI] Ollama-only activo, pero hay claves cloud. Usando fallback OpenAI/Gemini.");
-      }
-    }
+  if (!apiKey) {
+    const error = new Error("Falta OPENROUTER_API_KEY.");
+    error.statusCode = 500;
+    throw error;
   }
 
-  if (openaiKey) {
-    try {
-      return { ok: true, ...(await askOpenAI(message, contextPath, openaiKey, openaiModel)) };
-    } catch (openaiError) {
-      if (!geminiKey) throw openaiError;
-    }
-  }
-
-  if (geminiKey) {
-    return { ok: true, ...(await askGemini(message, contextPath, geminiKey, geminiModel)) };
-  }
-
-  const error = new Error(
-    ollamaEnabled
-      ? "Ollama no respondió. ¿Está corriendo? Prueba: ollama serve"
-      : "Falta OPENAI_API_KEY (o GEMINI_API_KEY).",
-  );
-  error.statusCode = 500;
-  throw error;
+  return {
+    ok: true,
+    ...(await askOpenRouter(message, contextPath, apiKey, model, siteUrl, siteTitle)),
+  };
 }

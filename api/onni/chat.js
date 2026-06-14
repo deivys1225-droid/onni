@@ -1,8 +1,8 @@
 /**
  * POST /api/onni/chat
  * Body: { message: string, contextPath?: string }
- * Orden: OpenAI (ChatGPT) → Gemini.
- * Secrets en Vercel: OPENAI_API_KEY, opcional GEMINI_API_KEY.
+ * Proveedor único: OpenRouter (modelo por defecto openrouter/free).
+ * Secrets en Vercel: OPENROUTER_API_KEY, opcional OPENROUTER_MODEL.
  */
 
 import { runOnniChat } from "./chatCore.js";

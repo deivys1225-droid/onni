@@ -6,12 +6,7 @@ import { Input } from "@/components/ui/input";
 import OnniAvatarDots from "@/components/OnniAvatarDots";
 import { getOnniIntroduction } from "@/data/onniBrain";
 import { toast } from "sonner";
-import {
-  getOpAssistantHint,
-  type DesktopAction,
-  type OnniMode,
-  resolveOpCommand,
-} from "@/lib/opAssistantResolver";
+import { getOpAssistantHint, type DesktopAction, resolveOpCommand } from "@/lib/opAssistantResolver";
 import { askOnniGemini } from "@/lib/onniGemini";
 import { shouldShowNativeVoiceError } from "@/lib/onniNativeVoiceErrors";
 import OpAiAndroidAzureMic from "@/components/OpAiAndroidAzureMic";
@@ -74,7 +69,6 @@ export default function OpAiAssistant() {
   const [electronMicState, setElectronMicState] = useState({ isRecording: false, isProcessing: false });
   const [text, setText] = useState("");
   const [processing, setProcessing] = useState(false);
-  const [onniMode, setOnniMode] = useState<OnniMode>("tareas");
   const [messages, setMessages] = useState<UiMessage[]>([
     { role: "assistant", text: getOnniIntroduction() },
   ]);
@@ -137,7 +131,7 @@ export default function OpAiAssistant() {
   const openRef = useRef(open);
   openRef.current = open;
 
-  const hint = useMemo(() => getOpAssistantHint(location.pathname, onniMode), [location.pathname, onniMode]);
+  const hint = useMemo(() => getOpAssistantHint(location.pathname), [location.pathname]);
   const isHomePortada = location.pathname === "/";
 
   const runCommand = useCallback(
@@ -164,11 +158,7 @@ export default function OpAiAssistant() {
         const result = resolveOpCommand(trimmed, location.pathname, {
           lastAnswer: sessionRef.current.lastAnswer,
           appRole: roleForCommand,
-          mode: onniMode,
         });
-        if (result.mode !== onniMode) {
-          setOnniMode(result.mode);
-        }
 
         if (result.handled && result.action) {
           const actionResult = await executeDesktopAction(result.action);
@@ -192,7 +182,7 @@ export default function OpAiAssistant() {
         if (aiAnswer) {
           finalAnswer = aiAnswer;
         } else {
-          finalAnswer = "No pude conectar con la IA (ChatGPT/Gemini). Revisa internet o las claves del backend.";
+          finalAnswer = "No pude conectar con OpenRouter. Revisa internet o la clave OPENROUTER_API_KEY en el backend.";
         }
         sessionRef.current.lastAnswer = finalAnswer;
         appendAssistantAnswer(setMessages, sessionRef, finalAnswer, speakAnswer);
@@ -201,7 +191,7 @@ export default function OpAiAssistant() {
         setProcessing(false);
       }
     },
-    [location.pathname, onniMode, speakAnswer, user?.id],
+    [location.pathname, speakAnswer, user?.id],
   );
 
   runCommandRef.current = runCommand;
@@ -534,16 +524,16 @@ export default function OpAiAssistant() {
 
   return (
     <div
-      className={`pointer-events-none fixed z-[80] w-[min(92vw,380px)] max-sm:flex max-sm:flex-col max-sm:items-start max-sm:gap-2 sm:block ${
+      className={`pointer-events-none fixed z-[80] max-sm:flex max-sm:flex-col max-sm:items-start max-sm:gap-2 sm:block ${
         isHomePortada && !open
-          ? "bottom-10 left-1/2 max-w-none -translate-x-1/2 max-sm:bottom-14 sm:bottom-8"
-          : "bottom-10 left-4 sm:bottom-8 sm:left-10"
+          ? "bottom-10 left-1/2 w-auto max-w-none -translate-x-1/2 max-sm:bottom-14 sm:bottom-8"
+          : "bottom-10 left-4 w-[min(92vw,380px)] sm:bottom-8 sm:left-10"
       }`}
     >
       {!open ? (
         <button
           type="button"
-          className={`pointer-events-auto relative z-[90] order-1 group flex flex-col items-center gap-3 rounded-2xl border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 ${
+          className={`pointer-events-auto relative z-[90] order-1 group flex flex-col items-center gap-2 rounded-2xl border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/70 ${
             isHomePortada
               ? "fixed left-1/2 top-[56%] -translate-x-1/2 -translate-y-1/2 max-sm:top-[58%]"
               : ""
@@ -553,23 +543,18 @@ export default function OpAiAssistant() {
             captureMicActive
               ? "Suelta Espacio o el micrófono para enviar a Onni"
               : wakeListening || nativeWakeListening
-              ? "Onni escuchando. Di Hola Onni y tu pedido"
-              : "Abrir Onni, asistente de voz y texto"
+                ? "Onni escuchando. Di Hola Onni y tu pedido"
+                : "Abrir Onni"
           }
         >
-          <OnniAvatarDots
-            size={isHomePortada ? "hero" : "lg"}
-            state={avatarState}
-          />
+          <OnniAvatarDots size={isHomePortada ? "hero" : "lg"} state={avatarState} />
         </button>
       ) : (
         <div className="pointer-events-auto rounded-2xl border border-cyan-300/35 bg-card/90 backdrop-blur-xl shadow-[0_0_45px_-16px_rgba(34,211,238,0.8)]">
           <div className="flex items-start gap-3 border-b border-white/10 px-3 py-3">
             <OnniAvatarDots size="md" state={avatarState} className="mt-0.5 shrink-0" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-cyan-100">
-                Onni · {onniMode === "tareas" ? "Modo tareas" : "Modo programador"}
-              </p>
+              <p className="text-sm font-semibold text-cyan-100">Onni</p>
             </div>
             <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
               Cerrar

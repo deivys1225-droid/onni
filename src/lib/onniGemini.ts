@@ -14,10 +14,8 @@ export type OnniGeminiResponse = {
 
 export function buildOnniGeminiSystemPrompt(contextPath: string): string {
   return [
-    "Eres Onni, la asistente de OnniVerso. Tu motor principal es ChatGPT (OpenAI).",
-    "IMPORTANTE: NUNCA digas «uso Google Gemini», «soy Gemini» ni «impulsada por Gemini» como respuesta principal.",
-    "Si preguntan si usas ChatGPT, Gemini u otra IA, responde SIEMPRE: «Sí, uso ChatGPT (OpenAI)».",
-    "Gemini solo existe como respaldo técnico si OpenAI falla; no lo menciones salvo que pregunten explícitamente por un respaldo.",
+    "Eres Onni, la asistente de OnniVerso. Respondes con modelos de IA a través de OpenRouter.",
+    "Si preguntan qué IA usas, responde: «Uso modelos de IA a través de OpenRouter».",
     "NUNCA digas que solo usas reglas fijas sin IA.",
     `El usuario está en la ruta: ${contextPath || "/"}.`,
     "OnniVerso es una plataforma de experiencias inmersivas; no enumeres secciones salvo que pregunten explícitamente qué hay o dónde ir.",
@@ -102,36 +100,8 @@ async function invokeOnniGeminiEdge(body: OnniGeminiRequest): Promise<OnniGemini
   return { answer, model: responseJson.model, provider: responseJson.provider };
 }
 
-/** Solo desarrollo local si VITE_GEMINI_API_KEY está en .env.local (último respaldo). */
-async function askOnniGeminiDevDirect(body: OnniGeminiRequest, apiKey: string): Promise<OnniGeminiResponse> {
-  const model = "gemini-2.5-flash";
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: buildOnniGeminiSystemPrompt(body.contextPath) }] },
-        contents: [{ role: "user", parts: [{ text: body.message }] }],
-        generationConfig: { maxOutputTokens: 512, temperature: 0.65 },
-      }),
-    },
-  );
-  const json = (await response.json()) as {
-    error?: { message?: string };
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
-  };
-  if (!response.ok) {
-    throw new Error(json.error?.message || `Gemini error (${response.status})`);
-  }
-  const answer =
-    json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("").trim() ?? "";
-  if (!answer) throw new Error("Gemini devolvió una respuesta vacía.");
-  return { answer, model, provider: "gemini" };
-}
-
 /**
- * Consulta IA para Onni: OpenAI (ChatGPT) primero, Gemini después.
+ * Consulta IA para Onni vía OpenRouter.
  * Producción: /api/onni/chat (Vercel) o Edge Function onni-gemini (Supabase).
  */
 export async function askOnniGemini(body: OnniGeminiRequest): Promise<string | null> {
@@ -142,13 +112,6 @@ export async function askOnniGemini(body: OnniGeminiRequest): Promise<string | n
     () => invokeOnniVercelChat(body),
     () => invokeOnniGeminiEdge(body),
   ];
-
-  if (import.meta.env.DEV) {
-    const geminiKey = (import.meta.env.VITE_GEMINI_API_KEY as string | undefined)?.trim();
-    if (geminiKey) {
-      providers.push(() => askOnniGeminiDevDirect(body, geminiKey));
-    }
-  }
 
   for (const attempt of providers) {
     try {
