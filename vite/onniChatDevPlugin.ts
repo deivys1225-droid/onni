@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Plugin } from "vite";
 import { runOnniChat } from "../api/onni/chatCore.js";
 import { runLeadfinderSearch } from "../api/leadfinder/searchCore.js";
-import telegramWebhookHandler from "../api/telegram/webhook.js";
+import telegramWebhookHandler from "../api/telegram-webhook.js";
 
 function readJsonBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {

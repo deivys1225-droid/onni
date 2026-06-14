@@ -6,14 +6,14 @@
  * Registrar: TELEGRAM_WEBHOOK_URL=https://onnivers.com/api/telegram-webhook
  */
 
-import { processOnniTelegramText } from "./telegram/onniTelegramCore.js";
+import { processOnniTelegramText } from "../lib/server/telegram/onniTelegramCore.js";
 import {
   getTelegramBotToken,
   isChatAllowed,
   sendTelegramChatAction,
   sendTelegramMessage,
   verifyTelegramWebhookSecret,
-} from "./telegram/telegramApi.js";
+} from "../lib/server/telegram/telegramApi.js";
 
 function cors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
