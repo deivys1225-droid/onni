@@ -69,7 +69,11 @@ export default defineConfig(({ mode }) => {
       },
     },
   },
-  plugins: [react(), paypalSdkHeadPlugin(mode, env), onniChatDevPlugin(devChatEnv)],
+  plugins: [
+    react(),
+    paypalSdkHeadPlugin(mode, env),
+    ...(mode === "development" ? [onniChatDevPlugin(devChatEnv)] : []),
+  ],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
