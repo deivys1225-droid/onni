@@ -1,10 +1,19 @@
 const DEFAULT_OPENROUTER_MODEL = "openrouter/free";
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11434";
+const DEFAULT_OLLAMA_MODEL = "gemma3:1b";
 
-export function buildOnniChatSystemPrompt(contextPath) {
+export function buildOnniChatSystemPrompt(contextPath, provider = "openrouter") {
+  const aiLine =
+    provider === "ollama"
+      ? "Si preguntan qué IA usas, responde: «Uso Gemma 3 local con Ollama en tu equipo»."
+      : "Si preguntan qué IA usas, responde: «Uso modelos de IA a través de OpenRouter».";
+
   return [
-    "Eres Onni, la asistente de OnniVerso. Respondes con modelos de IA a través de OpenRouter.",
-    "Si preguntan qué IA usas, responde: «Uso modelos de IA a través de OpenRouter».",
+    provider === "ollama"
+      ? "Eres Onni, la asistente de OnniVerso. Respondes con Ollama (Gemma 3) en el PC del usuario."
+      : "Eres Onni, la asistente de OnniVerso. Respondes con modelos de IA a través de OpenRouter.",
+    aiLine,
     "NUNCA digas que solo usas reglas fijas sin IA.",
     `El usuario está en la ruta: ${contextPath || "/"}.`,
     "OnniVerso es una plataforma de experiencias inmersivas; no enumeres secciones salvo que pregunten explícitamente qué hay o dónde ir.",
@@ -30,6 +39,39 @@ function cleanAnswer(raw) {
   return answer;
 }
 
+function isTruthyEnv(value) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase() === "true";
+}
+
+async function askOllama(message, contextPath, host, model = DEFAULT_OLLAMA_MODEL) {
+  const baseUrl = String(host || DEFAULT_OLLAMA_HOST).replace(/\/$/, "");
+  const response = await fetch(`${baseUrl}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      messages: [
+        { role: "system", content: buildOnniChatSystemPrompt(contextPath, "ollama") },
+        { role: "user", content: message },
+      ],
+      options: { temperature: 0.65, num_predict: 512 },
+    }),
+  });
+
+  const json = await response.json();
+  if (!response.ok) {
+    const errMsg = json?.error || `Ollama error (${response.status})`;
+    throw new Error(String(errMsg));
+  }
+
+  const text = json?.message?.content?.trim() ?? "";
+  if (!text) throw new Error("Ollama devolvió una respuesta vacía. ¿Está corriendo ollama serve?");
+  return { answer: cleanAnswer(text), model, provider: "ollama" };
+}
+
 async function askOpenRouter(message, contextPath, apiKey, model, siteUrl, siteTitle) {
   const headers = {
     "Content-Type": "application/json",
@@ -46,7 +88,7 @@ async function askOpenRouter(message, contextPath, apiKey, model, siteUrl, siteT
       temperature: 0.65,
       max_tokens: 512,
       messages: [
-        { role: "system", content: buildOnniChatSystemPrompt(contextPath) },
+        { role: "system", content: buildOnniChatSystemPrompt(contextPath, "openrouter") },
         { role: "user", content: message },
       ],
     }),
@@ -75,21 +117,44 @@ export async function runOnniChat(body, env = {}) {
   }
 
   const contextPath = String(body.contextPath ?? "/").trim() || "/";
+  const ollamaEnabled = isTruthyEnv(env.OLLAMA_ENABLED) || isTruthyEnv(env.VITE_OLLAMA_ENABLED);
+  const ollamaOnly = isTruthyEnv(env.OLLAMA_ONLY) || isTruthyEnv(env.VITE_OLLAMA_ONLY);
+  const ollamaHost =
+    env.OLLAMA_HOST?.trim() || env.VITE_OLLAMA_HOST?.trim() || DEFAULT_OLLAMA_HOST;
+  const ollamaModel =
+    env.OLLAMA_MODEL?.trim() || env.VITE_OLLAMA_MODEL?.trim() || DEFAULT_OLLAMA_MODEL;
   const apiKey = env.OPENROUTER_API_KEY?.trim() || env.VITE_OPENROUTER_API_KEY?.trim();
-  const model =
+  const openRouterModel =
     env.OPENROUTER_MODEL?.trim() || env.VITE_OPENROUTER_MODEL?.trim() || DEFAULT_OPENROUTER_MODEL;
   const siteUrl =
     env.OPENROUTER_SITE_URL?.trim() || env.VITE_SITE_URL?.trim() || "https://onnivers.com";
   const siteTitle = env.OPENROUTER_SITE_TITLE?.trim() || "OnniVerso";
 
+  if (ollamaEnabled) {
+    try {
+      return { ok: true, ...(await askOllama(message, contextPath, ollamaHost, ollamaModel)) };
+    } catch (ollamaError) {
+      if (ollamaOnly && !apiKey) throw ollamaError;
+      if (ollamaOnly && apiKey) {
+        console.warn("[Onni AI] Ollama no respondió; usando OpenRouter como respaldo.");
+      } else if (!apiKey) {
+        throw ollamaError;
+      }
+    }
+  }
+
   if (!apiKey) {
-    const error = new Error("Falta OPENROUTER_API_KEY.");
+    const error = new Error(
+      ollamaEnabled
+        ? "Ollama no respondió y falta OPENROUTER_API_KEY de respaldo."
+        : "Falta OPENROUTER_API_KEY.",
+    );
     error.statusCode = 500;
     throw error;
   }
 
   return {
     ok: true,
-    ...(await askOpenRouter(message, contextPath, apiKey, model, siteUrl, siteTitle)),
+    ...(await askOpenRouter(message, contextPath, apiKey, openRouterModel, siteUrl, siteTitle)),
   };
 }

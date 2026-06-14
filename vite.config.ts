@@ -27,6 +27,10 @@ export default defineConfig(async ({ mode }) => {
 
   if (mode === "development") {
     const devChatEnv: Record<string, string> = {
+      OLLAMA_ENABLED: env.OLLAMA_ENABLED || env.VITE_OLLAMA_ENABLED || "",
+      OLLAMA_ONLY: env.OLLAMA_ONLY || env.VITE_OLLAMA_ONLY || "",
+      OLLAMA_HOST: env.OLLAMA_HOST || env.VITE_OLLAMA_HOST || "",
+      OLLAMA_MODEL: env.OLLAMA_MODEL || env.VITE_OLLAMA_MODEL || "",
       OPENROUTER_API_KEY: env.OPENROUTER_API_KEY || env.VITE_OPENROUTER_API_KEY || "",
       OPENROUTER_MODEL: env.OPENROUTER_MODEL || env.VITE_OPENROUTER_MODEL || "",
       OPENROUTER_SITE_URL: env.OPENROUTER_SITE_URL || env.VITE_SITE_URL || "",

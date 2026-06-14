@@ -182,7 +182,7 @@ export default function OpAiAssistant() {
         if (aiAnswer) {
           finalAnswer = aiAnswer;
         } else {
-          finalAnswer = "No pude conectar con OpenRouter. Revisa internet o la clave OPENROUTER_API_KEY en el backend.";
+          finalAnswer = "No pude conectar con la IA. En local revisa que Ollama esté corriendo (gemma3:1b) o la clave OPENROUTER_API_KEY.";
         }
         sessionRef.current.lastAnswer = finalAnswer;
         appendAssistantAnswer(setMessages, sessionRef, finalAnswer, speakAnswer);
