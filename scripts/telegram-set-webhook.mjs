@@ -17,7 +17,7 @@ if (!token) {
   process.exit(1);
 }
 if (!webhookUrl) {
-  console.error("Falta TELEGRAM_WEBHOOK_URL (ej. https://onnivers.com/api/telegram/webhook)");
+  console.error("Falta TELEGRAM_WEBHOOK_URL (ej. https://onnivers.com/api/telegram-webhook)");
   process.exit(1);
 }
 
