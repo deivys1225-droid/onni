@@ -57,7 +57,12 @@ export function onniChatDevPlugin(env: Record<string, string>): Plugin {
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
         const url = req.url?.split("?")[0];
-        if (url !== "/api/onni/chat" && url !== "/api/leadfinder/search" && url !== "/api/telegram/webhook") {
+        if (
+          url !== "/api/onni/chat" &&
+          url !== "/api/leadfinder/search" &&
+          url !== "/api/telegram/webhook" &&
+          url !== "/api/telegram-webhook"
+        ) {
           return next();
         }
 
@@ -74,7 +79,7 @@ export function onniChatDevPlugin(env: Record<string, string>): Plugin {
 
         try {
           const body = await readJsonBody(req);
-          if (url === "/api/telegram/webhook") {
+          if (url === "/api/telegram/webhook" || url === "/api/telegram-webhook") {
             const previousEnv = {
               TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
               TELEGRAM_WEBHOOK_SECRET: process.env.TELEGRAM_WEBHOOK_SECRET,
