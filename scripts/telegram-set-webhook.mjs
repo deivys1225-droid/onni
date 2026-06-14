@@ -9,7 +9,9 @@
  */
 
 const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-const webhookUrl = process.env.TELEGRAM_WEBHOOK_URL?.trim();
+const webhookUrl =
+  process.env.TELEGRAM_WEBHOOK_URL?.trim() ||
+  process.env.SUPABASE_TELEGRAM_WEBHOOK_URL?.trim();
 const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
 
 if (!token) {
@@ -17,7 +19,9 @@ if (!token) {
   process.exit(1);
 }
 if (!webhookUrl) {
-  console.error("Falta TELEGRAM_WEBHOOK_URL (ej. https://onnivers.com/api/telegram-webhook)");
+  console.error(
+    "Falta TELEGRAM_WEBHOOK_URL o SUPABASE_TELEGRAM_WEBHOOK_URL (ej. https://TU_PROYECTO.supabase.co/functions/v1/onni-telegram)",
+  );
   process.exit(1);
 }
 
