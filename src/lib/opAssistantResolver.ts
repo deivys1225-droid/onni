@@ -1,5 +1,3 @@
-export type OnniMode = "tareas" | "programador";
-
 export type DesktopAction =
   | { type: "open_url"; url: string }
   | { type: "search_google"; query: string }
@@ -9,7 +7,6 @@ export type DesktopAction =
 
 export type OpResolveResult = {
   answer: string;
-  mode: OnniMode;
   handled: boolean;
   action?: DesktopAction;
 };
@@ -17,56 +14,17 @@ export type OpResolveResult = {
 export type OpResolveSession = {
   lastAnswer?: string;
   appRole?: string | null;
-  mode?: OnniMode;
 };
-
-function normalizeText(input: string): string {
-  return String(input || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim();
-}
 
 export function resolveOpCommand(
   textRaw: string,
   _currentPath: string,
-  session: OpResolveSession = {},
+  _session: OpResolveSession = {},
 ): OpResolveResult {
-  const mode: OnniMode = session.mode ?? "tareas";
   const raw = String(textRaw || "").trim();
-  const text = normalizeText(raw);
 
-  if (!text) {
-    return {
-      answer: mode === "tareas" ? "Modo tareas activo. ¿Qué necesitas?" : "Modo programador activo. ¿Qué quieres construir?",
-      mode,
-      handled: true,
-    };
-  }
-
-  if (/(^| )onni modo programador( |$)/.test(text)) {
-    return {
-      answer: "Listo. Cambio a modo programador.",
-      mode: "programador",
-      handled: true,
-    };
-  }
-
-  if (/(^| )onni modo tareas( |$)/.test(text)) {
-    return {
-      answer: "Listo. Cambio a modo tareas.",
-      mode: "tareas",
-      handled: true,
-    };
-  }
-
-  if (mode === "programador") {
-    return {
-      answer: "Modo programador activo. Te ayudo a crear, editar, instalar y ejecutar proyectos.",
-      mode,
-      handled: false,
-    };
+  if (!raw) {
+    return { answer: "¿Qué necesitas?", handled: true };
   }
 
   const ytWithQuery = raw.match(/abre\s+youtube\s+con\s+(.+)/i);
@@ -74,7 +32,6 @@ export function resolveOpCommand(
     const q = ytWithQuery[1].trim();
     return {
       answer: `Abriendo YouTube con: ${q}`,
-      mode,
       handled: true,
       action: { type: "open_url", url: `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}` },
     };
@@ -83,7 +40,6 @@ export function resolveOpCommand(
   if (/\babre\s+youtube\b/i.test(raw)) {
     return {
       answer: "Abriendo YouTube.",
-      mode,
       handled: true,
       action: { type: "open_url", url: "https://www.youtube.com/" },
     };
@@ -94,7 +50,26 @@ export function resolveOpCommand(
     const q = googleSearch[1].trim();
     return {
       answer: `Buscando en Google: ${q}`,
-      mode,
+      handled: true,
+      action: { type: "search_google", query: q },
+    };
+  }
+
+  const googleSearchAlt = raw.match(/busca\s+(.+?)\s+en\s+google/i);
+  if (googleSearchAlt?.[1]) {
+    const q = googleSearchAlt[1].trim();
+    return {
+      answer: `Buscando en Google: ${q}`,
+      handled: true,
+      action: { type: "search_google", query: q },
+    };
+  }
+
+  const googleSearchGeneric = raw.match(/^busca\s+(.+)$/i);
+  if (googleSearchGeneric?.[1] && !/\b(en\s+)?youtube\b/i.test(googleSearchGeneric[1])) {
+    const q = googleSearchGeneric[1].trim().replace(/\s+en\s+google$/i, "").trim() || googleSearchGeneric[1].trim();
+    return {
+      answer: `Buscando en Google: ${q}`,
       handled: true,
       action: { type: "search_google", query: q },
     };
@@ -103,7 +78,6 @@ export function resolveOpCommand(
   if (/\babre\s+google\b/i.test(raw)) {
     return {
       answer: "Abriendo Google.",
-      mode,
       handled: true,
       action: { type: "open_url", url: "https://www.google.com/" },
     };
@@ -112,7 +86,6 @@ export function resolveOpCommand(
   if (/\babre\s+(mi\s+)?wh(a|á)ts?app\b/i.test(raw)) {
     return {
       answer: "Abriendo WhatsApp.",
-      mode,
       handled: true,
       action: { type: "open_app", app: "whatsapp" },
     };
@@ -121,7 +94,6 @@ export function resolveOpCommand(
   if (/\babre\s+word\b/i.test(raw)) {
     return {
       answer: "Abriendo Microsoft Word.",
-      mode,
       handled: true,
       action: { type: "open_app", app: "word" },
     };
@@ -130,7 +102,6 @@ export function resolveOpCommand(
   if (/\babre(\s+el)?\s+reproductor\b/i.test(raw)) {
     return {
       answer: "Abriendo el reproductor.",
-      mode,
       handled: true,
       action: { type: "open_app", app: "reproductor" },
     };
@@ -139,7 +110,6 @@ export function resolveOpCommand(
   if (/(haz|crea|genera).*(pdf).*(esta pagina|esta página|pagina actual|página actual)/i.test(raw)) {
     return {
       answer: "Generando PDF de esta página.",
-      mode,
       handled: true,
       action: { type: "print_pdf_current_page" },
     };
@@ -151,7 +121,6 @@ export function resolveOpCommand(
     const location = createFolder[2]?.trim();
     return {
       answer: `Creando carpeta "${name}"${location ? ` en ${location}` : " en Escritorio"}.`,
-      mode,
       handled: true,
       action: { type: "create_folder", name, location },
     };
@@ -163,22 +132,15 @@ export function resolveOpCommand(
     if (!/(youtube|google|whatsapp|word|reproductor)/i.test(app)) {
       return {
         answer: `Intentando abrir ${app}.`,
-        mode,
         handled: true,
         action: { type: "open_app", app },
       };
     }
   }
 
-  return {
-    answer: "Te escucho.",
-    mode,
-    handled: false,
-  };
+  return { answer: "Te escucho.", handled: false };
 }
 
-export function getOpAssistantHint(_currentPath: string, mode: OnniMode = "tareas"): string {
-  return mode === "tareas"
-    ? "Modo tareas: abre apps/web, busca en Google, crea carpetas y exporta PDF."
-    : "Modo programador: enfocado en crear proyectos, código y automatizaciones.";
+export function getOpAssistantHint(_currentPath: string): string {
+  return "Puedo abrir apps y web, buscar en Google, crear carpetas y exportar PDF.";
 }

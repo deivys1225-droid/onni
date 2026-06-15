@@ -17,3 +17,8 @@ pnpm-debug.log*
 # Vídeos: Cloudinary / env (no subir MP4 en deploy)
 public/**/*.mp4
 public/*.mp4
+
+# Builds Electron locales (no subir a Vercel)
+release/
+release-electron/
+public/assets/models/
