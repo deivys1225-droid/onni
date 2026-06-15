@@ -1,6 +1,7 @@
 import { onniMicDeniedMessage, requestOnniMicrophoneAccess } from "@/lib/requestOnniMicrophone";
 import { stopAzureVoice } from "@/lib/onniAzureTts";
 import { isElectronDesktopApp } from "@/lib/deviceDetection";
+import { isOnniElectronVoskAvailable, transcribeOnniElectronVosk } from "@/lib/onniElectronVoskStt";
 
 const TARGET_SAMPLE_RATE = 16_000;
 const MAX_RECORD_MS = 25_000;
@@ -180,6 +181,17 @@ export async function transcribeBlobWithAzure(blob: Blob): Promise<string> {
   if (!blob.size) return "";
 
   const wav = await recordedBlobToWav(blob);
+
+  if (isElectronDesktopApp()) {
+    const voskReady = await isOnniElectronVoskAvailable();
+    if (voskReady) {
+      return transcribeOnniElectronVosk(wav);
+    }
+    throw new Error(
+      "Vosk no está listo en OnniVers. Ejecuta npm run desktop:vosk en el proyecto y reinicia la app.",
+    );
+  }
+
   const audioBase64 = await blobToBase64(wav);
   const res = await fetch("/api/azure/speech-stt", {
     method: "POST",

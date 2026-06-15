@@ -3,6 +3,7 @@ const path = require("path");
 const fs = require("fs/promises");
 const os = require("os");
 const { exec } = require("child_process");
+const { isVoskAvailable, transcribeWavBuffer } = require("./voskEngine.cjs");
 
 const DEFAULT_REMOTE_URL = "https://onni-eight.vercel.app/";
 
@@ -134,6 +135,35 @@ ipcMain.handle("onni:desktopAction", async (_event, action) => {
     }
 
     return { ok: false, message: "Accion no soportada." };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Error inesperado";
+    return { ok: false, message };
+  }
+});
+
+ipcMain.handle("onni:voskIsAvailable", async () => {
+  try {
+    return { ok: true, available: isVoskAvailable() };
+  } catch {
+    return { ok: true, available: false };
+  }
+});
+
+ipcMain.handle("onni:voskTranscribe", async (_event, payload) => {
+  try {
+    const audioBase64 = String(payload?.audioBase64 || "").trim();
+    if (!audioBase64) {
+      return { ok: false, message: "Audio vacío." };
+    }
+    if (!isVoskAvailable()) {
+      return {
+        ok: false,
+        message: "Vosk no está listo. Ejecuta npm run desktop:vosk y reinicia OnniVers.",
+      };
+    }
+    const wavBuffer = Buffer.from(audioBase64, "base64");
+    const text = transcribeWavBuffer(wavBuffer);
+    return { ok: true, text };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Error inesperado";
     return { ok: false, message };

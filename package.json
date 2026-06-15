@@ -23,9 +23,10 @@
     "telegram:bot:install": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-telegram-bot-autostart.ps1",
     "telegram:bot:uninstall": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall-telegram-bot-autostart.ps1",
     "desktop:icon": "node scripts/generate-desktop-icon.mjs",
+    "desktop:vosk": "node scripts/setup-vosk.mjs",
     "desktop:apply-icon": "node scripts/apply-desktop-icon.mjs",
-    "desktop:build": "npm run build && npm run desktop:icon && electron-builder --win nsis portable --publish never",
-    "desktop:pack": "npm run desktop:icon && electron-builder --win nsis portable --publish never",
+    "desktop:build": "npm run build && npm run desktop:icon && npm run desktop:vosk && electron-builder --win nsis portable --publish never",
+    "desktop:pack": "npm run desktop:icon && npm run desktop:vosk && electron-builder --win nsis portable --publish never",
     "desktop:start": "electron ."
   },
   "dependencies": {
@@ -85,6 +86,7 @@
     "tailwindcss-animate": "^1.0.7",
     "three": "^0.183.2",
     "vaul": "^0.9.9",
+    "vosk": "^0.3.39",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -127,6 +129,16 @@
       "package.json"
     ],
     "asar": true,
+    "asarUnpack": [
+      "**/node_modules/vosk/**"
+    ],
+    "extraResources": [
+      {
+        "from": "electron/vosk/model/vosk-model-small-es-0.42",
+        "to": "vosk-model",
+        "filter": ["**/*"]
+      }
+    ],
     "win": {
       "icon": "electron/icons/icon.ico",
       "target": [

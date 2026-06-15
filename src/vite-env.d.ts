@@ -61,6 +61,13 @@ interface Window {
     version?: string;
     isDesktopApp?: boolean;
     windowsNativeVoice?: boolean;
+    vosk?: {
+      isAvailable?: () => Promise<boolean>;
+      transcribe?: (payload: {
+        audioBase64: string;
+        mimeType?: string;
+      }) => Promise<{ text?: string }>;
+    };
     whisper?: {
       isAvailable?: () => Promise<boolean>;
       transcribe?: (payload: {
